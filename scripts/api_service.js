@@ -123,14 +123,14 @@ async function getOpenAISummary(abstractText, openaiApiKey) {
                 messages: [
                     {
                         role: 'system',
-                        content: '당신은 의학 논문 초록을 요약하는 전문가입니다. 한국어로 간결하게 요약해주세요.'
+                        content: '당신은 의학 논문 초록을 요약하는 전문가입니다. 한국어로 간결하게 요약해주세요. 의학용어, 해부학용어, 의료기기명, 약품명 등은 영어 그대로 유지하고 한글로 번역하지 마세요.'
                     },
                     {
                         role: 'user',
-                        content: `다음 의학 논문 초록을 한국어로 3-4문장으로 간결하게 요약해주세요: "${processedAbstract}"`
+                        content: `다음 의학 논문 초록을 한국어로 3-4문장으로 간결하게 요약해주세요. 의학용어, 해부학용어, 의료기기명, 약품명은 영어 그대로 유지해주세요: "${processedAbstract}"`
                     }
                 ],
-                temperature: 0.3
+                temperature: 0.1
             })
         });
 

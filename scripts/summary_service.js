@@ -9,7 +9,7 @@ class SummaryService {
     constructor() {
         // 이 클래스 안에 더 이상 API 키를 저장하지 않습니다.
         this.maxAbstractLength = 4000;
-        this.summaryTemperature = 0.3;
+        this.summaryTemperature = 0.1;
     }
 
     /**
@@ -89,11 +89,11 @@ class SummaryService {
                     messages: [
                         {
                             role: 'system',
-                            content: '당신은 의학 논문 초록을 요약하는 전문가입니다. 한국어로 간결하고 정확하게 요약해주세요. 중요한 연구 결과와 임상적 의의를 포함해주세요.'
+                            content: '당신은 의학 논문 초록을 요약하는 전문가입니다. 한국어로 간결하고 정확하게 요약해주세요. 중요한 연구 결과와 임상적 의의를 포함해주세요. 의학용어, 해부학용어, 의료기기명, 약품명 등은 영어 그대로 유지하고 한글로 번역하지 마세요.'
                         },
                         {
                             role: 'user',
-                            content: `다음 의학 논문 초록을 한국어로 3-4문장으로 간결하게 요약해주세요. 주요 연구 목적, 방법, 결과, 결론을 포함해주세요:\n\n"${processedText}"`
+                            content: `다음 의학 논문 초록을 한국어로 3-4문장으로 간결하게 요약해주세요. 주요 연구 목적, 방법, 결과, 결론을 포함하되, 의학용어, 해부학용어, 의료기기명, 약품명은 영어 그대로 유지해주세요:\n\n"${processedText}"`
                         }
                     ],
                     temperature: this.summaryTemperature,
