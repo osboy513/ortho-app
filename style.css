@@ -1,0 +1,173 @@
+/* Base styling for consistent font rendering */
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: 'Pretendard', sans-serif;
+    background-color: #F5F5DC; /* Beige */
+    color: #654321; /* Dark Brown */
+}
+
+/* Theme Variables */
+:root {
+    --bg-main: #F5F5DC; /* Beige */
+    --text-main: #654321; /* Dark Brown */
+    --bg-panel: #EAE0D5; /* Lighter Beige/Off-white for panels */
+    --accent: #654321; /* Dark Brown */
+    --accent-hover: #8B4513; /* SaddleBrown for hover */
+    --border: #CBBFB4; /* Muted Brown/Beige for borders */
+    --text-on-accent: #FFFFFF; /* White text on dark brown buttons */
+    --card-bg: #FFFFFF; /* White for article cards */
+    --card-shadow: rgba(101, 67, 33, 0.1);
+    --card-border-hover: #8B4513;
+}
+
+/* Apply Tailwind CSS for inputs using custom properties where needed */
+input[type="month"], input[type="text"] {
+    background-color: var(--card-bg);
+    border-color: var(--border);
+    color: var(--text-main);
+}
+
+/* Journal list scrollbar styling */
+.journal-list-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+.journal-list-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.journal-list-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #b0a191; /* Muted brown for light theme */
+    border-radius: 3px;
+}
+
+/* Article card styling */
+.article-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 4px var(--card-shadow);
+    transition: box-shadow 0.3s ease-in-out, transform 0.2s ease-in-out, border-color 0.3s ease-in-out;
+}
+
+.article-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 10px var(--card-shadow); /* Tailwind shadow-lg like intensity with theme color */
+    border-color: var(--card-border-hover);
+}
+
+/* Abstract content styling */
+.abstract-content {
+    max-height: 100px; /* Initial collapsed height */
+    overflow: hidden;
+    position: relative;
+    color: #654321;
+    transition: max-height 0.4s ease-in-out, color 0.3s;
+}
+
+.abstract-content::after { /* Fade-out effect */
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: linear-gradient(to bottom, transparent, var(--card-bg));
+    pointer-events: none;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.abstract-content.expanded {
+    max-height: 1000px; /* Adjust as needed for full abstract */
+}
+.abstract-content.expanded::after {
+    opacity: 0;
+}
+
+/* Summary button */
+.summary-button {
+    background-color: var(--accent);
+    color: var(--text-on-accent);
+    padding: 0.3rem 0.6rem;
+    border-radius: 0.375rem; /* rounded-md */
+    font-size: 0.8rem;
+    transition: background-color 0.15s ease-in-out;
+}
+.summary-button:hover {
+    background-color: var(--accent-hover);
+}
+.summary-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.summary-text-content {
+    font-size: 0.875rem; /* text-sm */
+    margin-top: 0.5rem; /* mt-2 */
+    padding: 0.5rem; /* p-2 */
+    border-radius: 0.375rem; /* rounded-md */
+    background-color: rgba(101, 67, 33, 0.05); /* very light brown tint */
+}
+.summary-error {
+    color: #ef4444; /* Red for errors */
+}
+
+/* Spinner for search button */
+.spinner {
+    display: none; /* Hidden by default, JS will show it */
+}
+
+/* Journal category and subcategory toggle icons */
+.category-toggle .lucide-icon,
+.subcategory-toggle .lucide-icon {
+    transition: transform 0.2s ease-in-out;
+}
+.category-toggle.expanded .lucide-icon,
+.subcategory-toggle.expanded .lucide-icon {
+    transform: rotate(180deg); /* Pointing up when expanded */
+}
+
+/* Styling for subcategory headers to make them slightly less prominent than main category headers */
+.subcategory-toggle {
+    /* bg-[#DCD0C0]/60 in JS, Tailwind handles this */
+    /* hover:bg-[#CBBFB4]/70 in JS */
+    /* p-1.5, rounded-md in JS */
+    /* font-semibold for h4 in JS */
+}
+
+/* Checkbox custom focus styling to match theme */
+#journal-filter-container input[type="checkbox"]:focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+    --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+    box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+    --tw-ring-opacity: 1;
+    --tw-ring-color: var(--accent); /* Dark Brown */
+}
+
+/* General link styling */
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+    color: var(--accent-hover);
+}
+
+/* Ensure that Tailwind's form-checkbox uses the accent color */
+.form-checkbox {
+    color: var(--accent); /* Dark Brown */
+}
+
+/* Tailwind typography plugin customization for prose content if any */
+.prose {
+    color: var(--text-main);
+}
+.prose strong {
+    color: var(--text-main);
+}
+
+.article-title {
+  color: #3A2F28;
+  text-shadow: none;
+}
