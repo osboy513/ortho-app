@@ -467,7 +467,7 @@ function setupJournalFilters(container) {
                         <input type="checkbox" id="${journal.id}" class="journal-checkbox h-3.5 w-3.5 form-checkbox transition rounded border-[#654321] border-2 text-[#654321] mr-2" 
                             data-category-id="${category.id}" 
                             data-subcategory-id="${subCategory.id}" 
-                            data-journal-name="${journal.name}">
+                            data-journal-name="${journal.abbr || journal.name}">
                         <label for="${journal.id}" class="text-xs text-[#654321]">${journal.name}</label>
                     `;
                     journalsList.appendChild(journalItem);
@@ -529,7 +529,7 @@ function setupJournalFilters(container) {
                 journalItem.innerHTML = `
                     <input type="checkbox" id="${journal.id}" class="journal-checkbox h-4 w-4 form-checkbox transition rounded border-[#654321] border-2 text-[#654321] mr-2" 
                         data-category-id="${category.id}" 
-                        data-journal-name="${journal.name}">
+                        data-journal-name="${journal.abbr || journal.name}">
                     <label for="${journal.id}" class="text-sm">${journal.name}</label>
                 `;
                 journalsList.appendChild(journalItem);
