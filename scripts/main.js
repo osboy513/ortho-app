@@ -311,7 +311,7 @@ function initUI() {
                 if (filteredArticles.length > 0) {
                     displayResultsCount(`총 ${totalResults}개의 논문 중, 기간에 맞는 ${filteredArticles.length}개를 표시합니다.`);
                 } else if (totalResults > 0) {
-                    displayResultsCount(`총 ${totalResults}개의 논문을 찾았으나, 설정된 기간에 맞는 결과가 없습니다.`);
+                    displayResultsCount(`총 ${totalResults}개의 논문을 찾았으나, 선택한 기간에 일치하는 결과가 없습니다. 날짜 범위를 다시 확인해 주세요.`);
                 } else {
                     displayResultsCount('검색 조건에 맞는 논문이 없습니다.');
                 }

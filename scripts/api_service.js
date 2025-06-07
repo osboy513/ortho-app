@@ -204,34 +204,39 @@ async function getOpenAISummary(abstractText, openaiApiKey) {
  * @returns {string} 파싱된 날짜 문자열
  */
 function parsePublicationDate(articleNode) {
-    let year = 'N/A', month = '01', day = '01';
+    let year = 'N/A', month = 'N/A', day = 'N/A';
 
-    const pubDateNode = articleNode.querySelector('PubmedData > History > PubMedPubDate[pubstatus="pubmed"], PubDate, ArticleDate');
+    const pubDateNode =
+        articleNode.querySelector('PubmedData > History > PubMedPubDate[PubStatus="pubmed"]') ||
+        articleNode.querySelector('PubmedData > History > PubMedPubDate[pubstatus="pubmed"]') ||
+        articleNode.querySelector('ArticleDate') ||
+        articleNode.querySelector('PubDate');
+
     if (pubDateNode) {
         const yearNode = pubDateNode.querySelector('Year');
         if (yearNode) year = yearNode.textContent;
 
-        let monthNode = pubDateNode.querySelector('Month');
+        const monthNode = pubDateNode.querySelector('Month');
         if (monthNode) {
-            let m = monthNode.textContent;
-            const monthMap = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+            const m = monthNode.textContent.trim();
+            const monthMap = { Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06', Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12' };
             if (monthMap[m]) month = monthMap[m];
             else if (!isNaN(m)) month = m.padStart(2, '0');
         }
 
-        let dayNode = pubDateNode.querySelector('Day');
+        const dayNode = pubDateNode.querySelector('Day');
         if (dayNode) day = dayNode.textContent.padStart(2, '0');
 
         // MedlineDate 파싱 (예: "2024 Jun" 또는 "2024")
-        let medlineDateNode = pubDateNode.querySelector('MedlineDate');
+        const medlineDateNode = pubDateNode.querySelector('MedlineDate');
         if (medlineDateNode) {
             const medline = medlineDateNode.textContent;
             const match = medline.match(/(\d{4})(?:\s*([A-Za-z]{3}))?/);
             if (match) {
                 year = match[1];
                 if (match[2]) {
-                    const monthMap = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-                    month = monthMap[match[2]] || '01';
+                    const monthMap = { Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06', Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12' };
+                    month = monthMap[match[2]] || month;
                 }
             }
         }
