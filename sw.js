@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ortho-paper-v1';
+const CACHE_NAME = 'ortho-paper-v2';
 const urlsToCache = [
   './',
   './index.html',
