@@ -301,22 +301,26 @@ function initUI() {
                 retmax: CONFIG.articlesPerPage
             });
 
+            // UTC 기준의 새로운 날짜 필터링 함수로 최종 필터링
             const filteredArticles = filterArticlesByDate(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
-
-            console.log(`API 응답: ${articles.length}개, 날짜 필터 후: ${filteredArticles.length}개`);
+            console.log(`API 응답: ${articles.length}개, 최종 필터 후: ${filteredArticles.length}개`);
 
             if (isNewSearch) {
                 totalResultsFound = totalResults;
-                if (totalResults === 0) {
-                    displayResultsCount('검색 조건에 맞는 논문이 없습니다.');
+                // 필터링된 결과에 따라 문구 표시
+                if (filteredArticles.length > 0) {
+                    displayResultsCount(`총 ${totalResults}개의 논문 중, 기간에 맞는 ${filteredArticles.length}개를 표시합니다.`);
+                } else if (totalResults > 0) {
+                    displayResultsCount(`총 ${totalResults}개의 논문을 찾았으나, 설정된 기간에 맞는 결과가 없습니다.`);
                 } else {
-                    displayResultsCount(`총 ${totalResults}개의 논문 중 ${filteredArticles.length}개를 표시합니다.`);
+                    displayResultsCount('검색 조건에 맞는 논문이 없습니다.');
                 }
                 displayArticles(filteredArticles, articlesListElement, true);
             } else {
                 appendArticles(filteredArticles, articlesListElement);
             }
             
+            // 페이징 및 '더 이상 결과 없음' 로직은 API 응답 기준
             currentRetstart += articles.length;
             allArticlesLoaded = articles.length === 0 || articles.length < CONFIG.articlesPerPage || currentRetstart >= totalResults;
             
@@ -750,20 +754,23 @@ function setupJournalFilters(container) {
                     const startUTC = Date.UTC(startYear, startMonth - 1, 1);
 
                     const [endYear, endMonth] = endDateStr.split('-').map(Number);
-                    const endUTC = Date.UTC(endYear, endMonth, 0); // 해당 월의 마지막 날
+                    // 종료일은 '다음달 1일 0시' 직전으로 계산하여 해당 월 전체를 포함
+                    const endUTC = Date.UTC(endYear, endMonth, 1) - 1;
 
                     return articles.filter(article => {
-                        if (!article.publicationDate || !/^\d{4}-\d{2}/.test(article.publicationDate)) return false;
+                        // publicationDate가 없거나 유효한 형식이 아니면 필터링에서 제외
+                        if (!article.publicationDate || !/^\d{4}-\d{2}/.test(article.publicationDate)) {
+                            return false;
+                        }
 
                         const [pubYear, pubMonth] = article.publicationDate.split('-').map(Number);
                         const articleUTC = Date.UTC(pubYear, pubMonth - 1, 1);
                         
-                        // 시작일의 첫날부터 종료일의 마지막 날까지 포함
                         return articleUTC >= startUTC && articleUTC <= endUTC;
                     });
                 } catch (e) {
                     console.error("날짜 필터링 중 오류 발생:", e);
-                    return articles;
+                    return articles; // 오류 시 필터링하지 않음
                 }
             }
             
