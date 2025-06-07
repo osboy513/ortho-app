@@ -105,8 +105,11 @@ async function searchPubMed(queryOptions) {
         const xmlText = await fetchResponse.text();
         const articles = parseArticleXml(xmlText);
         
+        // 모바일 환경용 날짜 필터링 적용
+        const filteredArticles = filterArticlesByDate(articles, startDate, endDate);
+        
         return {
-            articles,
+            articles: filteredArticles,
             totalResults
         };
     } catch (error) {
@@ -284,6 +287,45 @@ function parseArticleXml(xmlText) {
     });
 
     return articles;
+}
+
+/**
+ * 모바일 환경 호환 날짜 필터링 함수
+ * @param {Array} articles - 논문 배열
+ * @param {string} startDate - YYYY-MM 형식
+ * @param {string} endDate - YYYY-MM 형식
+ * @returns {Array} 필터링된 논문 배열
+ */
+function filterArticlesByDate(articles, startDate, endDate) {
+    if (!startDate || !endDate || !articles) return articles;
+
+    try {
+        // 시작일: yyyy-mm → yyyy-mm-01 (해당 월 1일)
+        const start = new Date(startDate + '-01');
+        // 종료일: 다음 달 1일로 설정하여 해당 월 전체 포함
+        const end = new Date(endDate + '-01');
+        end.setMonth(end.getMonth() + 1);
+
+        return articles.filter(article => {
+            if (!article.publicationDate) return false;
+            
+            // 논문 발행일 처리 (YYYY-MM 또는 YYYY-MM-DD 형식)
+            let pubDateStr = article.publicationDate;
+            if (/^\d{4}-\d{2}$/.test(pubDateStr)) {
+                pubDateStr += '-01'; // YYYY-MM → YYYY-MM-01
+            }
+            
+            const articleDate = new Date(pubDateStr);
+            
+            // Date 객체가 유효한지 확인
+            if (isNaN(articleDate.getTime())) return false;
+            
+            return articleDate >= start && articleDate < end;
+        });
+    } catch (error) {
+        console.error('Date filtering error:', error);
+        return articles; // 오류 시 원본 반환
+    }
 }
 
 /**

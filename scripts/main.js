@@ -237,16 +237,14 @@ function initUI() {
     // 저널 필터 UI 설정
     setupJournalFilters(journalFilterContainer);
     
-    // 무한 스크롤 설정
-    if (scrollSentinel && rightPanelScroller) {
-        setupInfiniteScroll(scrollSentinel, rightPanelScroller, () => {
-            if (!isLoadingMore && !allArticlesLoaded && hasMore && currentSearchQuery) {
-                isLoadingMore = true;
-                showInfiniteScrollLoader();
-                performSearch(false);
-            }
-        });
-    }
+    // 모바일 환경용 무한 스크롤 설정 함수
+    setupMobileInfiniteScroll(() => {
+        if (!isLoadingMore && !allArticlesLoaded && hasMore && currentSearchQuery) {
+            isLoadingMore = true;
+            showInfiniteScrollLoader();
+            performSearch(false);
+        }
+    });
 
     // 폼 입력 유효성 실시간 검사 및 검색 버튼 상태 업데이트
     const formElements = [startDateInput, endDateInput, keywordsInput].filter(Boolean);
@@ -300,22 +298,16 @@ function initUI() {
                 retmax: CONFIG.articlesPerPage
             });
 
-            // 날짜 필터링 적용
-            let filteredArticles = articles;
-            if (currentSearchQuery.startDate && currentSearchQuery.endDate) {
-                filteredArticles = articles.filter(a => isWithinRange(a.publicationDate, currentSearchQuery.startDate, currentSearchQuery.endDate));
-            }
-
             if (isNewSearch) {
                 totalResultsFound = totalResults; 
-                if (filteredArticles.length === 0 && totalResultsFound === 0) {
+                if (articles.length === 0 && totalResultsFound === 0) {
                     displayResultsCount('검색 조건에 맞는 논문이 없습니다.');
                 } else {
                     displayResultsCount(`${totalResultsFound}개의 논문을 찾았습니다.`);
                 }
-                displayArticles(filteredArticles, articlesListElement, true); 
+                displayArticles(articles, articlesListElement, true); 
             } else {
-                appendArticles(filteredArticles, articlesListElement); 
+                appendArticles(articles, articlesListElement); 
             }
             
             currentRetstart += articles.length;
@@ -716,20 +708,6 @@ function setupJournalFilters(container) {
                 };
             }
             
-            // 날짜 비교 함수 (YYYY-MM 또는 YYYY-MM-DD 지원)
-            function isWithinRange(pubDate, startDate, endDate) {
-                if (!pubDate) return false;
-                const pub = pubDate.length === 7 ? pubDate + '-01' : pubDate;
-                const start = startDate.length === 7 ? startDate + '-01' : startDate;
-                let end = endDate.length === 7 ? (() => {
-                    const [y, m] = endDate.split('-').map(Number);
-                    const d = new Date(y, m, 0).getDate();
-                    return `${endDate}-${d}`;
-                })() : endDate;
-                return pub >= start && pub <= end;
-            }
-
-            
             // 네트워크 상태 모니터링 및 사용자 피드백 개선
             window.addEventListener('online', () => {
                 clearGlobalError();
@@ -758,4 +736,35 @@ function setupJournalFilters(container) {
                 // 필요한 경우 정리 작업 수행
                 console.log('페이지를 떠납니다.');
             });
+            
+            // 모바일 환경용 무한 스크롤 설정 함수
+            function setupMobileInfiniteScroll(callback) {
+                let isScrolling = false;
+                
+                window.addEventListener('scroll', () => {
+                    if (isScrolling) return;
+                    isScrolling = true;
+                    
+                    // 모바일 브라우저 호환성을 위한 스크롤 위치 계산
+                    const scrollPosition = window.innerHeight + (window.scrollY || window.pageYOffset || document.documentElement.scrollTop);
+                    
+                    // 문서 전체 높이 계산 (모바일 브라우저 주소창 변화 고려)
+                    const body = document.body;
+                    const html = document.documentElement;
+                    const documentHeight = Math.max(
+                        body.scrollHeight, body.offsetHeight,
+                        html.clientHeight, html.scrollHeight, html.offsetHeight
+                    );
+                    
+                    // 하단에서 100px 이내에 도달했을 때 새로운 데이터 로드
+                    if (scrollPosition >= documentHeight - 100) {
+                        callback();
+                    }
+                    
+                    // 스크롤 이벤트 쓰로틀링 (모바일 성능 최적화)
+                    setTimeout(() => {
+                        isScrolling = false;
+                    }, 100);
+                }, { passive: true }); // 모바일 스크롤 성능 최적화
+            }
             
