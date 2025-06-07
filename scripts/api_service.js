@@ -25,7 +25,7 @@ async function searchPubMed(queryOptions) {
         searchTerms.push(`(${journalQuery})`);
     }
     
-    // 날짜 필터 처리 (수정된 부분)
+    // 날짜 필터 처리 - 포괄적인 날짜 검색
     if (startDate && endDate) {
         try {
             // YYYY-MM 형식을 YYYY/MM/01 및 YYYY/MM/마지막날로 변환
@@ -39,8 +39,16 @@ async function searchPubMed(queryOptions) {
             const lastDayOfMonth = new Date(endYear, endMonth, 0).getDate();
             const endDateFormatted = `${endYear}/${String(endMonth).padStart(2, '0')}/${String(lastDayOfMonth).padStart(2, '0')}`;
             
-            console.log('PubMed 날짜 쿼리:', startDateFormatted, '-', endDateFormatted);
-            searchTerms.push(`("${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication])`);
+            console.log('PubMed 날짜 쿼리 범위:', startDateFormatted, '-', endDateFormatted);
+            
+            // 여러 날짜 필드를 OR로 연결하여 포괄적 검색
+            const dateQuery = [
+                `"${startDateFormatted}"[Date - Entrez] : "${endDateFormatted}"[Date - Entrez]`,
+                `"${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication]`,
+                `"${startDateFormatted}"[Date - Create] : "${endDateFormatted}"[Date - Create]`
+            ].join(' OR ');
+            
+            searchTerms.push(`(${dateQuery})`);
         } catch (error) {
             console.error('Date processing error:', error);
             // 날짜 처리 실패 시 쿼리에서 제외
@@ -189,8 +197,9 @@ async function getOpenAISummary(abstractText, openaiApiKey) {
 function parsePublicationDate(articleNode) {
     let year = '', month = '', day = '';
 
-    // 여러 날짜 소스를 우선순위에 따라 체크
+    // 여러 날짜 소스를 우선순위에 따라 체크 (EntrezDate 최우선)
     const dateNodes = [
+        articleNode.querySelector('PubmedData > History > PubMedPubDate[PubStatus="entrez"]'),
         articleNode.querySelector('PubmedData > History > PubMedPubDate[PubStatus="pubmed"]'),
         articleNode.querySelector('Article > ArticleDate[DateType="Electronic"]'),
         articleNode.querySelector('Article > Journal > JournalIssue > PubDate'),

@@ -411,8 +411,10 @@ function initDateFields(startDateInput, endDateInput) {
     startDateInput.value = formatYearMonth(lastYear);
     endDateInput.value = formatYearMonth(today);
     
-    // 최대값 설정
-    const maxDate = formatYearMonth(today);
+    // 최대값: 오늘로부터 5년 후까지 허용
+    const maxFutureDate = new Date();
+    maxFutureDate.setFullYear(maxFutureDate.getFullYear() + 5);
+    const maxDate = formatYearMonth(maxFutureDate);
     startDateInput.max = maxDate;
     endDateInput.max = maxDate;
 
