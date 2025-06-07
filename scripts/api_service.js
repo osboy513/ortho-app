@@ -27,16 +27,41 @@ async function searchPubMed(queryOptions) {
     
     // 날짜 필터 처리 (수정된 부분)
     if (startDate && endDate) {
-        // startDate는 YYYY-MM 형식이므로, YYYY/MM/01 형식으로 변환
-        const startDateFormatted = startDate.replace('-', '/') + '/01';
+        try {
+            // startDate 처리: YYYY-MM 형식을 YYYY/MM/01로 변환
+            let startDateFormatted = '';
+            if (startDate.match(/^\d{4}-\d{2}$/)) {
+                startDateFormatted = startDate.replace('-', '/') + '/01';
+            } else if (startDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                startDateFormatted = startDate.replace(/-/g, '/');
+            } else {
+                console.warn('Invalid startDate format:', startDate);
+                startDateFormatted = startDate.replace('-', '/') + '/01';
+            }
 
-        // endDate는 YYYY-MM 형식이므로, 해당 월의 마지막 날짜를 계산하여 YYYY/MM/DD 형식으로 변환
-        const [year, month] = endDate.split('-').map(Number);
-        // new Date(year, month, 0)는 'month'의 마지막 날짜를 의미 (예: month가 5이면 5월 31일)
-        const lastDayOfMonth = new Date(year, month, 0).getDate();
-        const endDateFormatted = `${year.toString().padStart(4, '0')}/${month.toString().padStart(2, '0')}/${lastDayOfMonth.toString().padStart(2, '0')}`;
+            // endDate 처리: YYYY-MM 형식을 해당 월의 마지막 날로 변환
+            let endDateFormatted = '';
+            if (endDate.match(/^\d{4}-\d{2}$/)) {
+                const [year, month] = endDate.split('-').map(Number);
+                // 해당 월의 마지막 날짜 계산
+                const lastDayOfMonth = new Date(year, month, 0).getDate();
+                endDateFormatted = `${year.toString().padStart(4, '0')}/${month.toString().padStart(2, '0')}/${lastDayOfMonth.toString().padStart(2, '0')}`;
+            } else if (endDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                endDateFormatted = endDate.replace(/-/g, '/');
+            } else {
+                console.warn('Invalid endDate format:', endDate);
+                const [year, month] = endDate.split('-').map(Number);
+                const lastDayOfMonth = new Date(year, month, 0).getDate();
+                endDateFormatted = `${year.toString().padStart(4, '0')}/${month.toString().padStart(2, '0')}/${lastDayOfMonth.toString().padStart(2, '0')}`;
+            }
 
-        searchTerms.push(`("${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication])`);
+            console.log(`Date filter: ${startDateFormatted} to ${endDateFormatted}`);
+            searchTerms.push(`("${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication])`);
+        } catch (error) {
+            console.error('Date processing error:', error);
+            // 날짜 처리 실패 시 원본 값 사용 (fallback)
+            searchTerms.push(`("${startDate}"[Date - Publication] : "${endDate}"[Date - Publication])`);
+        }
     }
     
     // 키워드 처리

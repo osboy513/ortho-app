@@ -226,6 +226,7 @@ function initUI() {
     let totalResultsFound = 0;
     let isLoadingMore = false;
     let allArticlesLoaded = false;
+    let hasMore = true;
 
     // 날짜 입력 필드 초기화
     initDateFields(startDateInput, endDateInput);
@@ -239,7 +240,7 @@ function initUI() {
     // 무한 스크롤 설정
     if (scrollSentinel && rightPanelScroller) {
         setupInfiniteScroll(scrollSentinel, rightPanelScroller, () => {
-            if (!isLoadingMore && !allArticlesLoaded && currentSearchQuery) {
+            if (!isLoadingMore && !allArticlesLoaded && hasMore && currentSearchQuery) {
                 isLoadingMore = true;
                 showInfiniteScrollLoader();
                 performSearch(false);
@@ -283,6 +284,7 @@ function initUI() {
             currentSearchQuery = searchInputs;
             currentRetstart = 0;
             allArticlesLoaded = false;
+            hasMore = true; // 새 검색 시 hasMore 초기화
             
             // UI 업데이트
             clearGlobalError();
@@ -312,6 +314,11 @@ function initUI() {
             
             currentRetstart += articles.length;
             allArticlesLoaded = totalResultsFound === 0 || articles.length < CONFIG.articlesPerPage || currentRetstart >= totalResultsFound;
+            
+            // hasMore 상태 업데이트
+            if (articles.length === 0 || articles.length < CONFIG.articlesPerPage) {
+                hasMore = false;
+            }
             
             if (allArticlesLoaded) {
                 if (totalResultsFound > 0 && articlesListElement?.children.length > 0) {
