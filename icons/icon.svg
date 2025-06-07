@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#F5F5DC" rx="100" ry="100" />
-  <rect x="50" y="50" width="412" height="412" fill="#EAE0D5" rx="80" ry="80" />
-  <text x="256" y="256" font-family="Arial, sans-serif" font-size="220" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#654321">정</text>
-  <text x="256" y="360" font-family="Arial, sans-serif" font-size="60" font-weight="bold" text-anchor="middle" fill="#8B4513">논문</text>
-</svg> 
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="45" fill="#2c3e50" stroke="#34495e" stroke-width="2"/>
+  <text x="50" y="35" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="white">ORTHO</text>
+  <text x="50" y="50" font-family="Arial, sans-serif" font-size="8" text-anchor="middle" fill="white">PEDIC</text>
+  <text x="50" y="65" font-family="Arial, sans-serif" font-size="8" text-anchor="middle" fill="white">RESEARCH</text>
+</svg>
