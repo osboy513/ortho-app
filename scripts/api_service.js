@@ -204,47 +204,56 @@ async function getOpenAISummary(abstractText, openaiApiKey) {
  * @returns {string} 파싱된 날짜 문자열
  */
 function parsePublicationDate(articleNode) {
-    let year = 'N/A', month = '01', day = '01';
+    let year = '', month = '', day = '';
 
-    const pubDateNode = articleNode.querySelector('PubmedData > History > PubMedPubDate[pubstatus="pubmed"], PubDate, ArticleDate');
-    if (pubDateNode) {
-        const yearNode = pubDateNode.querySelector('Year');
-        if (yearNode) year = yearNode.textContent;
+    // 날짜 노드 탐색 순서 - 최대한 다양한 위치의 날짜 정보를 포괄
+    const selectors = [
+        'PubmedData > History > PubMedPubDate[PubStatus="pubmed"]',
+        'PubmedData > History > PubMedPubDate[pubstatus="pubmed"]',
+        'ArticleDate[DateType="Electronic"]',
+        'ArticleDate',
+        'Journal PubDate',
+        'PubDate',
+        'DateCreated',
+        'DateCompleted',
+        'DateRevised'
+    ];
 
-        let monthNode = pubDateNode.querySelector('Month');
-        if (monthNode) {
-            let m = monthNode.textContent;
-            const monthMap = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-            if (monthMap[m]) month = monthMap[m];
-            else if (!isNaN(m)) month = m.padStart(2, '0');
-        }
+    let pubDateNode = null;
+    for (const sel of selectors) {
+        pubDateNode = articleNode.querySelector(sel);
+        if (pubDateNode) break;
+    }
 
-        let dayNode = pubDateNode.querySelector('Day');
-        if (dayNode) day = dayNode.textContent.padStart(2, '0');
+    if (!pubDateNode) return '';
 
-        // MedlineDate 파싱 (예: "2024 Jun" 또는 "2024")
-        let medlineDateNode = pubDateNode.querySelector('MedlineDate');
-        if (medlineDateNode) {
-            const medline = medlineDateNode.textContent;
-            const match = medline.match(/(\d{4})(?:\s*([A-Za-z]{3}))?/);
-            if (match) {
-                year = match[1];
-                if (match[2]) {
-                    const monthMap = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-                    month = monthMap[match[2]] || '01';
-                }
-            }
+    const monthMap = { Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06', Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12' };
+
+    const yearNode = pubDateNode.querySelector('Year');
+    if (yearNode) year = yearNode.textContent.trim();
+
+    const monthNode = pubDateNode.querySelector('Month');
+    if (monthNode) {
+        const m = monthNode.textContent.trim();
+        month = monthMap[m] || (!isNaN(m) ? m.padStart(2, '0') : month);
+    }
+
+    const dayNode = pubDateNode.querySelector('Day');
+    if (dayNode) day = dayNode.textContent.trim().padStart(2, '0');
+
+    const medlineNode = pubDateNode.querySelector('MedlineDate');
+    if (medlineNode) {
+        const medline = medlineNode.textContent.trim();
+        const match = medline.match(/(\d{4})(?:\s*([A-Za-z]{3}))?/);
+        if (match) {
+            year = match[1];
+            if (match[2]) month = monthMap[match[2]] || month;
         }
     }
 
-    // 최소한 YYYY-MM 형식으로 반환
-    if (year !== 'N/A' && month !== 'N/A' && day !== 'N/A') {
-        return `${year}-${month}-${day}`;
-    } else if (year !== 'N/A' && month !== 'N/A') {
-        return `${year}-${month}`;
-    } else if (year !== 'N/A') {
-        return year;
-    }
+    if (year && month && day) return `${year}-${month}-${day}`;
+    if (year && month) return `${year}-${month}`;
+    if (year) return year;
     return '';
 }
 
