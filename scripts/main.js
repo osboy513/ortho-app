@@ -758,19 +758,19 @@ function setupJournalFilters(container) {
                     const endUTC = Date.UTC(endYear, endMonth, 1) - 1;
 
                     return articles.filter(article => {
-                        // publicationDate가 없거나 유효한 형식이 아니면 필터링에서 제외
-                        if (!article.publicationDate || !/^\d{4}-\d{2}/.test(article.publicationDate)) {
-                            return false;
-                        }
-
-                        const [pubYear, pubMonth] = article.publicationDate.split('-').map(Number);
-                        const articleUTC = Date.UTC(pubYear, pubMonth - 1, 1);
-                        
+                        if (!article.publicationDate) return false;
+                        // YYYY-MM-DD, YYYY-MM, YYYY 모두 지원
+                        const parts = article.publicationDate.split('-');
+                        let pubYear = Number(parts[0]);
+                        let pubMonth = parts[1] ? Number(parts[1]) : 1;
+                        let pubDay = parts[2] ? Number(parts[2]) : 1;
+                        if (!pubYear || isNaN(pubYear)) return false;
+                        const articleUTC = Date.UTC(pubYear, pubMonth - 1, pubDay);
                         return articleUTC >= startUTC && articleUTC <= endUTC;
                     });
                 } catch (e) {
                     console.error("날짜 필터링 중 오류 발생:", e);
-                    return articles; // 오류 시 필터링하지 않음
+                    return articles;
                 }
             }
             

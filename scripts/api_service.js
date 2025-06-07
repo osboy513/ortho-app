@@ -204,40 +204,35 @@ async function getOpenAISummary(abstractText, openaiApiKey) {
  * @returns {string} 파싱된 날짜 문자열
  */
 function parsePublicationDate(articleNode) {
-    let year = 'N/A', month = 'N/A', day = 'N/A';
+    let year = 'N/A', month = '01', day = '01';
 
     const pubDateNode = articleNode.querySelector('PubmedData > History > PubMedPubDate[pubstatus="pubmed"], PubDate, ArticleDate');
-    
     if (pubDateNode) {
         const yearNode = pubDateNode.querySelector('Year');
         if (yearNode) year = yearNode.textContent;
-        
-        const monthNode = pubDateNode.querySelector('Month');
-        if (monthNode) month = monthNode.textContent;
-        
-        const dayNode = pubDateNode.querySelector('Day');
-        if (dayNode) day = dayNode.textContent;
 
-        if (isNaN(parseInt(month))) {
-            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            const monthIndex = monthNames.findIndex(m => m.toLowerCase() === month.toLowerCase());
-            if (monthIndex !== -1) {
-                month = (monthIndex + 1).toString().padStart(2, '0');
-            }
-        } else {
-            month = month.padStart(2, '0');
+        let monthNode = pubDateNode.querySelector('Month');
+        if (monthNode) {
+            let m = monthNode.textContent;
+            // 영문 월을 숫자로 변환
+            const monthMap = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+            if (monthMap[m]) month = monthMap[m];
+            else if (!isNaN(m)) month = m.padStart(2, '0');
         }
-        day = day.padStart(2, '0');
 
-        if (year !== 'N/A' && month !== 'N/A' && day !== 'N/A') {
-            return `${year}-${month}-${day}`;
-        } else if (year !== 'N/A' && month !== 'N/A') {
-            return `${year}-${month}`;
-        } else if (year !== 'N/A') {
-            return year;
-        }
+        let dayNode = pubDateNode.querySelector('Day');
+        if (dayNode) day = dayNode.textContent.padStart(2, '0');
     }
-    return 'No date information';
+
+    // 최소한 YYYY-MM 형식으로 반환
+    if (year !== 'N/A' && month !== 'N/A' && day !== 'N/A') {
+        return `${year}-${month}-${day}`;
+    } else if (year !== 'N/A' && month !== 'N/A') {
+        return `${year}-${month}`;
+    } else if (year !== 'N/A') {
+        return year;
+    }
+    return '';
 }
 
 /**
