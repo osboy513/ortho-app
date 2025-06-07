@@ -237,13 +237,13 @@ function initUI() {
     // 저널 필터 UI 설정
     setupJournalFilters(journalFilterContainer);
     
-    // 무한 스크롤 설정 (IntersectionObserver 기반)
+    // IntersectionObserver를 사용한 무한 스크롤 설정
     if (scrollSentinel) {
         setupInfiniteScroll(scrollSentinel, rightPanelScroller, () => {
-            if (!isLoadingMore && !allArticlesLoaded && hasMore && currentSearchQuery) {
-                console.log("스크롤 트리거, 추가 로딩 시작");
-                performSearch(false);
-            }
+            if (isLoadingMore || allArticlesLoaded || !currentSearchQuery) return;
+            
+            console.log("스크롤 감지: 추가 논문을 로드합니다.");
+            performSearch(false);
         });
     }
 
@@ -283,13 +283,15 @@ function initUI() {
             currentSearchQuery = searchInputs;
             currentRetstart = 0;
             allArticlesLoaded = false;
-            hasMore = true; // 새 검색 시 hasMore 초기화
+            hasMore = true;
             
-            // UI 업데이트
             clearGlobalError();
             clearResultsDisplay();
             showInitialLoadingIndicator(true);
             setSearchButtonLoading(true);
+        } else {
+            isLoadingMore = true;
+            showInfiniteScrollLoader();
         }
 
         try {
@@ -299,37 +301,33 @@ function initUI() {
                 retmax: CONFIG.articlesPerPage
             });
 
-            // 프론트엔드에서 날짜 필터링 최종 수행 (타임존 문제 해결)
             const filteredArticles = filterArticlesByDate(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
 
+            console.log(`API 응답: ${articles.length}개, 날짜 필터 후: ${filteredArticles.length}개`);
+
             if (isNewSearch) {
-                totalResultsFound = totalResults; 
-                if (filteredArticles.length === 0 && totalResults === 0) {
+                totalResultsFound = totalResults;
+                if (totalResults === 0) {
                     displayResultsCount('검색 조건에 맞는 논문이 없습니다.');
                 } else {
-                    displayResultsCount(`PubMed에서 ${totalResultsFound}개의 논문을 찾았습니다. (기간 필터링 적용)`);
+                    displayResultsCount(`총 ${totalResults}개의 논문 중 ${filteredArticles.length}개를 표시합니다.`);
                 }
                 displayArticles(filteredArticles, articlesListElement, true);
             } else {
-                appendArticles(filteredArticles, articlesListElement); 
+                appendArticles(filteredArticles, articlesListElement);
             }
             
-            // 실제 API에서 받아온 articles.length로 페이징 계산
             currentRetstart += articles.length;
-            // 더 불러올 데이터가 있는지 여부는 API 응답 기준
-            allArticlesLoaded = totalResults === 0 || articles.length < CONFIG.articlesPerPage || currentRetstart >= totalResults;
+            allArticlesLoaded = articles.length === 0 || articles.length < CONFIG.articlesPerPage || currentRetstart >= totalResults;
             
             if (allArticlesLoaded) {
                 hasMore = false;
-                if (totalResults > 0 && articlesListElement?.children.length > 0) {
+                if (totalResults > 0 && articlesListElement.children.length > 0) {
                     showNoMoreResults();
                 } else {
                     hideNoMoreResults();
                 }
-            } else {
-                hideNoMoreResults(); 
             }
-
         } catch (error) {
             console.error('Search failed:', error);
             let userErrorMessage = '논문 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
@@ -648,18 +646,20 @@ function setupJournalFilters(container) {
             // 무한 스크롤 설정
             function setupInfiniteScroll(sentinel, container, callback) {
                 const observerOptions = {
-                    root: window.innerWidth < 768 ? null : container, // 모바일에서는 viewport, 데스크톱에서는 컨테이너
-                    rootMargin: '0px 0px 300px 0px', // 하단 300px 전에 미리 로드
+                    root: window.matchMedia('(max-width: 767px)').matches ? null : container,
+                    rootMargin: '0px 0px 400px 0px', // 400px 아래에서 미리 로드
                     threshold: 0.01
                 };
 
                 const observer = new IntersectionObserver((entries) => {
-                    if (entries[0].isIntersecting) {
+                    if (entries[0]?.isIntersecting) {
                         callback();
                     }
                 }, observerOptions);
 
-                observer.observe(sentinel);
+                if (sentinel) {
+                    observer.observe(sentinel);
+                }
             }
             
             // 검색 버튼 상태 업데이트
@@ -742,29 +742,28 @@ function setupJournalFilters(container) {
             });
             
             // 타임존 문제 해결을 위한 UTC 기반 날짜 필터링 함수
-            function filterArticlesByDate(articles, startDate, endDate) {
-                if (!startDate || !endDate) return articles;
+            function filterArticlesByDate(articles, startDateStr, endDateStr) {
+                if (!startDateStr || !endDateStr) return articles;
 
                 try {
-                    const [startYear, startMonth] = startDate.split('-').map(Number);
-                    const start = Date.UTC(startYear, startMonth - 1, 1);
+                    const [startYear, startMonth] = startDateStr.split('-').map(Number);
+                    const startUTC = Date.UTC(startYear, startMonth - 1, 1);
 
-                    const [endYear, endMonth] = endDate.split('-').map(Number);
-                    const end = Date.UTC(endYear, endMonth, 1); // 다음 달 1일 0시
+                    const [endYear, endMonth] = endDateStr.split('-').map(Number);
+                    const endUTC = Date.UTC(endYear, endMonth, 0); // 해당 월의 마지막 날
 
                     return articles.filter(article => {
-                        if (!article.publicationDate || !/^\d{4}-\d{2}/.test(article.publicationDate)) {
-                            return false;
-                        }
+                        if (!article.publicationDate || !/^\d{4}-\d{2}/.test(article.publicationDate)) return false;
 
                         const [pubYear, pubMonth] = article.publicationDate.split('-').map(Number);
-                        const articleTime = Date.UTC(pubYear, pubMonth - 1, 1);
-
-                        return articleTime >= start && articleTime < end;
+                        const articleUTC = Date.UTC(pubYear, pubMonth - 1, 1);
+                        
+                        // 시작일의 첫날부터 종료일의 마지막 날까지 포함
+                        return articleUTC >= startUTC && articleUTC <= endUTC;
                     });
                 } catch (e) {
                     console.error("날짜 필터링 중 오류 발생:", e);
-                    return articles; // 오류 발생 시 필터링하지 않고 반환
+                    return articles;
                 }
             }
             
