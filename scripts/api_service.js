@@ -28,39 +28,22 @@ async function searchPubMed(queryOptions) {
     // 날짜 필터 처리 (수정된 부분)
     if (startDate && endDate) {
         try {
-            // startDate 처리: YYYY-MM 형식을 YYYY/MM/01로 변환
-            let startDateFormatted = '';
-            if (startDate.match(/^\d{4}-\d{2}$/)) {
-                startDateFormatted = startDate.replace('-', '/') + '/01';
-            } else if (startDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                startDateFormatted = startDate.replace(/-/g, '/');
-            } else {
-                console.warn('Invalid startDate format:', startDate);
-                startDateFormatted = startDate.replace('-', '/') + '/01';
-            }
-
-            // endDate 처리: YYYY-MM 형식을 해당 월의 마지막 날로 변환
-            let endDateFormatted = '';
-            if (endDate.match(/^\d{4}-\d{2}$/)) {
-                const [year, month] = endDate.split('-').map(Number);
-                // 해당 월의 마지막 날짜 계산
-                const lastDayOfMonth = new Date(year, month, 0).getDate();
-                endDateFormatted = `${year.toString().padStart(4, '0')}/${month.toString().padStart(2, '0')}/${lastDayOfMonth.toString().padStart(2, '0')}`;
-            } else if (endDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                endDateFormatted = endDate.replace(/-/g, '/');
-            } else {
-                console.warn('Invalid endDate format:', endDate);
-                const [year, month] = endDate.split('-').map(Number);
-                const lastDayOfMonth = new Date(year, month, 0).getDate();
-                endDateFormatted = `${year.toString().padStart(4, '0')}/${month.toString().padStart(2, '0')}/${lastDayOfMonth.toString().padStart(2, '0')}`;
-            }
-
-            console.log('PubMed 날짜 쿼리:', startDateFormatted, endDateFormatted);
+            // YYYY-MM 형식을 YYYY/MM/01 및 YYYY/MM/마지막날로 변환
+            const [startYear, startMonth] = startDate.split('-').map(Number);
+            const [endYear, endMonth] = endDate.split('-').map(Number);
+            
+            // 시작일: 해당 월의 첫날
+            const startDateFormatted = `${startYear}/${String(startMonth).padStart(2, '0')}/01`;
+            
+            // 종료일: 해당 월의 마지막 날
+            const lastDayOfMonth = new Date(endYear, endMonth, 0).getDate();
+            const endDateFormatted = `${endYear}/${String(endMonth).padStart(2, '0')}/${String(lastDayOfMonth).padStart(2, '0')}`;
+            
+            console.log('PubMed 날짜 쿼리:', startDateFormatted, '-', endDateFormatted);
             searchTerms.push(`("${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication])`);
         } catch (error) {
             console.error('Date processing error:', error);
-            // 날짜 처리 실패 시 원본 값 사용 (fallback)
-            searchTerms.push(`("${startDate}"[Date - Publication] : "${endDate}"[Date - Publication])`);
+            // 날짜 처리 실패 시 쿼리에서 제외
         }
     }
     
@@ -204,47 +187,79 @@ async function getOpenAISummary(abstractText, openaiApiKey) {
  * @returns {string} 파싱된 날짜 문자열
  */
 function parsePublicationDate(articleNode) {
-    let year = 'N/A', month = '01', day = '01';
+    let year = '', month = '', day = '';
 
-    const pubDateNode = articleNode.querySelector('PubmedData > History > PubMedPubDate[pubstatus="pubmed"], PubDate, ArticleDate');
-    if (pubDateNode) {
-        const yearNode = pubDateNode.querySelector('Year');
-        if (yearNode) year = yearNode.textContent;
+    // 여러 날짜 소스를 우선순위에 따라 체크
+    const dateNodes = [
+        articleNode.querySelector('PubmedData > History > PubMedPubDate[PubStatus="pubmed"]'),
+        articleNode.querySelector('Article > ArticleDate[DateType="Electronic"]'),
+        articleNode.querySelector('Article > Journal > JournalIssue > PubDate'),
+        articleNode.querySelector('MedlineCitation > DateCompleted'),
+        articleNode.querySelector('MedlineCitation > DateRevised')
+    ];
 
-        let monthNode = pubDateNode.querySelector('Month');
-        if (monthNode) {
-            let m = monthNode.textContent;
-            const monthMap = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-            if (monthMap[m]) month = monthMap[m];
-            else if (!isNaN(m)) month = m.padStart(2, '0');
-        }
+    for (const dateNode of dateNodes) {
+        if (dateNode) {
+            // Year
+            const yearNode = dateNode.querySelector('Year');
+            if (yearNode) year = yearNode.textContent;
 
-        let dayNode = pubDateNode.querySelector('Day');
-        if (dayNode) day = dayNode.textContent.padStart(2, '0');
+            // Month
+            const monthNode = dateNode.querySelector('Month');
+            if (monthNode) {
+                const monthText = monthNode.textContent;
+                const monthMap = {
+                    'Jan': '01', 'January': '01',
+                    'Feb': '02', 'February': '02',
+                    'Mar': '03', 'March': '03',
+                    'Apr': '04', 'April': '04',
+                    'May': '05',
+                    'Jun': '06', 'June': '06',
+                    'Jul': '07', 'July': '07',
+                    'Aug': '08', 'August': '08',
+                    'Sep': '09', 'September': '09',
+                    'Oct': '10', 'October': '10',
+                    'Nov': '11', 'November': '11',
+                    'Dec': '12', 'December': '12'
+                };
+                month = monthMap[monthText] || (isNaN(monthText) ? '' : monthText.padStart(2, '0'));
+            }
 
-        // MedlineDate 파싱 (예: "2024 Jun" 또는 "2024")
-        let medlineDateNode = pubDateNode.querySelector('MedlineDate');
-        if (medlineDateNode) {
-            const medline = medlineDateNode.textContent;
-            const match = medline.match(/(\d{4})(?:\s*([A-Za-z]{3}))?/);
-            if (match) {
-                year = match[1];
-                if (match[2]) {
-                    const monthMap = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-                    month = monthMap[match[2]] || '01';
+            // Day
+            const dayNode = dateNode.querySelector('Day');
+            if (dayNode) day = dayNode.textContent.padStart(2, '0');
+
+            // MedlineDate 파싱
+            const medlineDateNode = dateNode.querySelector('MedlineDate');
+            if (medlineDateNode && !year) {
+                const medlineText = medlineDateNode.textContent;
+                const yearMatch = medlineText.match(/(\d{4})/);
+                if (yearMatch) year = yearMatch[1];
+                
+                const monthMatch = medlineText.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i);
+                if (monthMatch) {
+                    const monthMap = {
+                        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                        'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                        'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                    };
+                    month = monthMap[monthMatch[1]] || month;
                 }
             }
+
+            if (year) break; // 날짜를 찾았으면 중단
         }
     }
 
-    // 최소한 YYYY-MM 형식으로 반환
-    if (year !== 'N/A' && month !== 'N/A' && day !== 'N/A') {
+    // 날짜 포맷팅
+    if (year && month && day) {
         return `${year}-${month}-${day}`;
-    } else if (year !== 'N/A' && month !== 'N/A') {
+    } else if (year && month) {
         return `${year}-${month}`;
-    } else if (year !== 'N/A') {
-        return year;
+    } else if (year) {
+        return `${year}`;
     }
+    
     return '';
 }
 
