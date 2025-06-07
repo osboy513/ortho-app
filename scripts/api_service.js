@@ -214,7 +214,6 @@ function parsePublicationDate(articleNode) {
         let monthNode = pubDateNode.querySelector('Month');
         if (monthNode) {
             let m = monthNode.textContent;
-            // 영문 월을 숫자로 변환
             const monthMap = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
             if (monthMap[m]) month = monthMap[m];
             else if (!isNaN(m)) month = m.padStart(2, '0');
@@ -222,6 +221,20 @@ function parsePublicationDate(articleNode) {
 
         let dayNode = pubDateNode.querySelector('Day');
         if (dayNode) day = dayNode.textContent.padStart(2, '0');
+
+        // MedlineDate 파싱 (예: "2024 Jun" 또는 "2024")
+        let medlineDateNode = pubDateNode.querySelector('MedlineDate');
+        if (medlineDateNode) {
+            const medline = medlineDateNode.textContent;
+            const match = medline.match(/(\d{4})(?:\s*([A-Za-z]{3}))?/);
+            if (match) {
+                year = match[1];
+                if (match[2]) {
+                    const monthMap = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+                    month = monthMap[match[2]] || '01';
+                }
+            }
+        }
     }
 
     // 최소한 YYYY-MM 형식으로 반환
