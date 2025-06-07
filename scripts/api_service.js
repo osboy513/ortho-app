@@ -25,9 +25,18 @@ async function searchPubMed(queryOptions) {
         searchTerms.push(`(${journalQuery})`);
     }
     
-    // 날짜 필터 처리
+    // 날짜 필터 처리 (수정된 부분)
     if (startDate && endDate) {
-        searchTerms.push(`("${startDate}"[Date - Publication] : "${endDate}"[Date - Publication])`);
+        // startDate는 YYYY-MM 형식이므로, YYYY/MM/01 형식으로 변환
+        const startDateFormatted = startDate.replace('-', '/') + '/01';
+
+        // endDate는 YYYY-MM 형식이므로, 해당 월의 마지막 날짜를 계산하여 YYYY/MM/DD 형식으로 변환
+        const [year, month] = endDate.split('-').map(Number);
+        // new Date(year, month, 0)는 'month'의 마지막 날짜를 의미 (예: month가 5이면 5월 31일)
+        const lastDayOfMonth = new Date(year, month, 0).getDate();
+        const endDateFormatted = `${year.toString().padStart(4, '0')}/${month.toString().padStart(2, '0')}/${lastDayOfMonth.toString().padStart(2, '0')}`;
+
+        searchTerms.push(`("${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication])`);
     }
     
     // 키워드 처리

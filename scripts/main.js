@@ -212,9 +212,10 @@ function initUI() {
     const resultsPanel = document.getElementById('results-panel');
     const articlesListElement = document.getElementById('articles-list');
     const scrollSentinel = document.getElementById('scroll-sentinel');
+    const rightPanelScroller = document.getElementById('right-panel-scroller');
 
     // 필수 요소 존재 확인
-    if (!searchButton || !startDateInput || !endDateInput || !journalFilterContainer) {
+    if (!searchButton || !startDateInput || !endDateInput || !journalFilterContainer || !rightPanelScroller) {
         console.error('필수 UI 요소를 찾을 수 없습니다.');
         return;
     }
@@ -236,8 +237,8 @@ function initUI() {
     setupJournalFilters(journalFilterContainer);
     
     // 무한 스크롤 설정
-    if (scrollSentinel && resultsPanel) {
-        setupInfiniteScroll(scrollSentinel, resultsPanel, () => {
+    if (scrollSentinel && rightPanelScroller) {
+        setupInfiniteScroll(scrollSentinel, rightPanelScroller, () => {
             if (!isLoadingMore && !allArticlesLoaded && currentSearchQuery) {
                 isLoadingMore = true;
                 showInfiniteScrollLoader();
