@@ -257,10 +257,15 @@ function initUI() {
     const observer = new MutationObserver(() => {
         updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton);
     });
-    observer.observe(journalFilterContainer, { 
-        subtree: true, 
+    observer.observe(journalFilterContainer, {
+        subtree: true,
         attributes: true,
-        attributeFilter: ['checked'] 
+        attributeFilter: ['checked']
+    });
+
+    // 체크박스 상태 변경 시 직접 검색 버튼 상태 업데이트
+    journalFilterContainer.addEventListener('change', () => {
+        updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton);
     });
 
     // 검색 수행 함수
@@ -302,7 +307,8 @@ function initUI() {
             });
 
             // UTC 기준의 새로운 날짜 필터링 함수로 최종 필터링
-            const filteredArticles = filterArticlesByDate(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
+                    let filteredArticles = filterArticlesByDate(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
+                    filteredArticles = sortArticlesByDateDesc(filteredArticles);
             console.log(`API 응답: ${articles.length}개, 최종 필터 후: ${filteredArticles.length}개`);
 
             if (isNewSearch) {
@@ -311,12 +317,13 @@ function initUI() {
                 if (filteredArticles.length > 0) {
                     displayResultsCount(`총 ${totalResults}개의 논문 중, 기간에 맞는 ${filteredArticles.length}개를 표시합니다.`);
                 } else if (totalResults > 0) {
-                    displayResultsCount(`총 ${totalResults}개의 논문을 찾았으나, 설정된 기간에 맞는 결과가 없습니다.`);
+                    displayResultsCount(`총 ${totalResults}개의 논문을 찾았으나, 선택한 기간에 일치하는 결과가 없습니다. 날짜 범위를 다시 확인해 주세요.`);
                 } else {
                     displayResultsCount('검색 조건에 맞는 논문이 없습니다.');
                 }
                 displayArticles(filteredArticles, articlesListElement, true);
             } else {
+                filteredArticles = sortArticlesByDateDesc(filteredArticles);
                 appendArticles(filteredArticles, articlesListElement);
             }
             
@@ -758,13 +765,18 @@ function setupJournalFilters(container) {
                     const endUTC = Date.UTC(endYear, endMonth, 1) - 1;
 
                     return articles.filter(article => {
-                        if (!article.publicationDate) return false;
-                        // YYYY-MM-DD, YYYY-MM, YYYY 모두 지원
+                        if (!article.publicationDate) return true; // 날짜가 없으면 포함
+
                         const parts = article.publicationDate.split('-');
-                        let pubYear = Number(parts[0]);
-                        let pubMonth = parts[1] ? Number(parts[1]) : 1;
-                        let pubDay = parts[2] ? Number(parts[2]) : 1;
-                        if (!pubYear || isNaN(pubYear)) return false;
+                        const pubYear = Number(parts[0]);
+                        if (!pubYear || isNaN(pubYear)) return true; // 파싱 실패 시 포함
+
+                        // 월 정보가 없거나 유효하지 않으면 범위를 판단할 수 없으므로 포함
+                        if (parts.length < 2) return true;
+                        const pubMonth = Number(parts[1]);
+                        if (isNaN(pubMonth) || pubMonth < 1 || pubMonth > 12) return true;
+
+                        const pubDay = parts[2] ? Number(parts[2]) : 1;
                         const articleUTC = Date.UTC(pubYear, pubMonth - 1, pubDay);
                         return articleUTC >= startUTC && articleUTC <= endUTC;
                     });
@@ -772,5 +784,20 @@ function setupJournalFilters(container) {
                     console.error("날짜 필터링 중 오류 발생:", e);
                     return articles;
                 }
+            }
+
+            // 출간일을 기준으로 내림차순 정렬
+            function sortArticlesByDateDesc(articles) {
+                const getTimestamp = (dateStr) => {
+                    if (!dateStr) return 0;
+                    const parts = dateStr.split('-').map(Number);
+                    if (!parts[0] || isNaN(parts[0])) return 0;
+                    const year = parts[0];
+                    const month = parts[1] ? parts[1] - 1 : 0;
+                    const day = parts[2] ? parts[2] : 1;
+                    return Date.UTC(year, month, day);
+                };
+
+                return articles.slice().sort((a, b) => getTimestamp(b.publicationDate) - getTimestamp(a.publicationDate));
             }
             
