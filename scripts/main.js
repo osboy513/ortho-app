@@ -237,14 +237,15 @@ function initUI() {
     // 저널 필터 UI 설정
     setupJournalFilters(journalFilterContainer);
     
-    // 모바일 환경용 무한 스크롤 설정 함수
-    setupMobileInfiniteScroll(() => {
-        if (!isLoadingMore && !allArticlesLoaded && hasMore && currentSearchQuery) {
-            isLoadingMore = true;
-            showInfiniteScrollLoader();
-            performSearch(false);
-        }
-    });
+    // 무한 스크롤 설정 (IntersectionObserver 기반)
+    if (scrollSentinel) {
+        setupInfiniteScroll(scrollSentinel, rightPanelScroller, () => {
+            if (!isLoadingMore && !allArticlesLoaded && hasMore && currentSearchQuery) {
+                console.log("스크롤 트리거, 추가 로딩 시작");
+                performSearch(false);
+            }
+        });
+    }
 
     // 폼 입력 유효성 실시간 검사 및 검색 버튼 상태 업데이트
     const formElements = [startDateInput, endDateInput, keywordsInput].filter(Boolean);
@@ -298,28 +299,29 @@ function initUI() {
                 retmax: CONFIG.articlesPerPage
             });
 
+            // 프론트엔드에서 날짜 필터링 최종 수행 (타임존 문제 해결)
+            const filteredArticles = filterArticlesByDate(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
+
             if (isNewSearch) {
                 totalResultsFound = totalResults; 
-                if (articles.length === 0 && totalResultsFound === 0) {
+                if (filteredArticles.length === 0 && totalResults === 0) {
                     displayResultsCount('검색 조건에 맞는 논문이 없습니다.');
                 } else {
-                    displayResultsCount(`${totalResultsFound}개의 논문을 찾았습니다.`);
+                    displayResultsCount(`PubMed에서 ${totalResultsFound}개의 논문을 찾았습니다. (기간 필터링 적용)`);
                 }
-                displayArticles(articles, articlesListElement, true); 
+                displayArticles(filteredArticles, articlesListElement, true);
             } else {
-                appendArticles(articles, articlesListElement); 
+                appendArticles(filteredArticles, articlesListElement); 
             }
             
+            // 실제 API에서 받아온 articles.length로 페이징 계산
             currentRetstart += articles.length;
-            allArticlesLoaded = totalResultsFound === 0 || articles.length < CONFIG.articlesPerPage || currentRetstart >= totalResultsFound;
-            
-            // hasMore 상태 업데이트
-            if (articles.length === 0 || articles.length < CONFIG.articlesPerPage) {
-                hasMore = false;
-            }
+            // 더 불러올 데이터가 있는지 여부는 API 응답 기준
+            allArticlesLoaded = totalResults === 0 || articles.length < CONFIG.articlesPerPage || currentRetstart >= totalResults;
             
             if (allArticlesLoaded) {
-                if (totalResultsFound > 0 && articlesListElement?.children.length > 0) {
+                hasMore = false;
+                if (totalResults > 0 && articlesListElement?.children.length > 0) {
                     showNoMoreResults();
                 } else {
                     hideNoMoreResults();
@@ -412,6 +414,10 @@ function initDateFields(startDateInput, endDateInput) {
     const maxDate = formatYearMonth(today);
     startDateInput.max = maxDate;
     endDateInput.max = maxDate;
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
 }
 
 // 저널 필터 UI 설정
@@ -642,20 +648,18 @@ function setupJournalFilters(container) {
             // 무한 스크롤 설정
             function setupInfiniteScroll(sentinel, container, callback) {
                 const observerOptions = {
-                    root: container,
-                    rootMargin: '0px 0px 200px 0px',
+                    root: window.innerWidth < 768 ? null : container, // 모바일에서는 viewport, 데스크톱에서는 컨테이너
+                    rootMargin: '0px 0px 300px 0px', // 하단 300px 전에 미리 로드
                     threshold: 0.01
                 };
+
                 const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            callback();
-                        }
-                    });
+                    if (entries[0].isIntersecting) {
+                        callback();
+                    }
                 }, observerOptions);
-                if (sentinel) {
-                    observer.observe(sentinel);
-                }
+
+                observer.observe(sentinel);
             }
             
             // 검색 버튼 상태 업데이트
@@ -737,34 +741,30 @@ function setupJournalFilters(container) {
                 console.log('페이지를 떠납니다.');
             });
             
-            // 모바일 환경용 무한 스크롤 설정 함수
-            function setupMobileInfiniteScroll(callback) {
-                let isScrolling = false;
-                
-                window.addEventListener('scroll', () => {
-                    if (isScrolling) return;
-                    isScrolling = true;
-                    
-                    // 모바일 브라우저 호환성을 위한 스크롤 위치 계산
-                    const scrollPosition = window.innerHeight + (window.scrollY || window.pageYOffset || document.documentElement.scrollTop);
-                    
-                    // 문서 전체 높이 계산 (모바일 브라우저 주소창 변화 고려)
-                    const body = document.body;
-                    const html = document.documentElement;
-                    const documentHeight = Math.max(
-                        body.scrollHeight, body.offsetHeight,
-                        html.clientHeight, html.scrollHeight, html.offsetHeight
-                    );
-                    
-                    // 하단에서 100px 이내에 도달했을 때 새로운 데이터 로드
-                    if (scrollPosition >= documentHeight - 100) {
-                        callback();
-                    }
-                    
-                    // 스크롤 이벤트 쓰로틀링 (모바일 성능 최적화)
-                    setTimeout(() => {
-                        isScrolling = false;
-                    }, 100);
-                }, { passive: true }); // 모바일 스크롤 성능 최적화
+            // 타임존 문제 해결을 위한 UTC 기반 날짜 필터링 함수
+            function filterArticlesByDate(articles, startDate, endDate) {
+                if (!startDate || !endDate) return articles;
+
+                try {
+                    const [startYear, startMonth] = startDate.split('-').map(Number);
+                    const start = Date.UTC(startYear, startMonth - 1, 1);
+
+                    const [endYear, endMonth] = endDate.split('-').map(Number);
+                    const end = Date.UTC(endYear, endMonth, 1); // 다음 달 1일 0시
+
+                    return articles.filter(article => {
+                        if (!article.publicationDate || !/^\d{4}-\d{2}/.test(article.publicationDate)) {
+                            return false;
+                        }
+
+                        const [pubYear, pubMonth] = article.publicationDate.split('-').map(Number);
+                        const articleTime = Date.UTC(pubYear, pubMonth - 1, 1);
+
+                        return articleTime >= start && articleTime < end;
+                    });
+                } catch (e) {
+                    console.error("날짜 필터링 중 오류 발생:", e);
+                    return articles; // 오류 발생 시 필터링하지 않고 반환
+                }
             }
             
