@@ -144,8 +144,19 @@
     <script>
         // 앱 새로고침 버튼
         document.getElementById('refresh-app').addEventListener('click', function() {
+            if (navigator.serviceWorker) {
+                navigator.serviceWorker.getRegistration().then(reg => {
+                    if (reg) reg.update();
+                });
+            }
             window.location.reload();
         });
+
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                window.location.reload();
+            });
+        }
         
         // iOS에서 touchstart 이벤트 추가
         document.addEventListener('touchstart', function() {}, false);
