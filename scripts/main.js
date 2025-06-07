@@ -300,16 +300,22 @@ function initUI() {
                 retmax: CONFIG.articlesPerPage
             });
 
+            // 날짜 필터링 적용
+            let filteredArticles = articles;
+            if (currentSearchQuery.startDate && currentSearchQuery.endDate) {
+                filteredArticles = articles.filter(a => isWithinRange(a.publicationDate, currentSearchQuery.startDate, currentSearchQuery.endDate));
+            }
+
             if (isNewSearch) {
                 totalResultsFound = totalResults; 
-                if (articles.length === 0 && totalResultsFound === 0) {
+                if (filteredArticles.length === 0 && totalResultsFound === 0) {
                     displayResultsCount('검색 조건에 맞는 논문이 없습니다.');
                 } else {
                     displayResultsCount(`${totalResultsFound}개의 논문을 찾았습니다.`);
                 }
-                displayArticles(articles, articlesListElement, true); 
+                displayArticles(filteredArticles, articlesListElement, true); 
             } else {
-                appendArticles(articles, articlesListElement); 
+                appendArticles(filteredArticles, articlesListElement); 
             }
             
             currentRetstart += articles.length;
@@ -643,17 +649,11 @@ function setupJournalFilters(container) {
             
             // 무한 스크롤 설정
             function setupInfiniteScroll(sentinel, container, callback) {
-                let observerRoot = null;
-                if (window.matchMedia('(min-width: 768px)').matches && container) {
-                    observerRoot = container;
-                }
-            
                 const observerOptions = {
-                    root: observerRoot,
-                    rootMargin: '0px 0px 200px 0px', 
-                    threshold: 0.01 
+                    root: container,
+                    rootMargin: '0px 0px 200px 0px',
+                    threshold: 0.01
                 };
-                
                 const observer = new IntersectionObserver((entries) => {
                     entries.forEach(entry => {
                         if (entry.isIntersecting) {
@@ -661,7 +661,6 @@ function setupJournalFilters(container) {
                         }
                     });
                 }, observerOptions);
-                
                 if (sentinel) {
                     observer.observe(sentinel);
                 }
@@ -717,6 +716,18 @@ function setupJournalFilters(container) {
                 };
             }
             
+            // 날짜 비교 함수 (YYYY-MM 또는 YYYY-MM-DD 지원)
+            function isWithinRange(pubDate, startDate, endDate) {
+                if (!pubDate) return false;
+                const pub = pubDate.length === 7 ? pubDate + '-01' : pubDate;
+                const start = startDate.length === 7 ? startDate + '-01' : startDate;
+                let end = endDate.length === 7 ? (() => {
+                    const [y, m] = endDate.split('-').map(Number);
+                    const d = new Date(y, m, 0).getDate();
+                    return `${endDate}-${d}`;
+                })() : endDate;
+                return pub >= start && pub <= end;
+            }
 
             
             // 네트워크 상태 모니터링 및 사용자 피드백 개선

@@ -55,7 +55,7 @@ async function searchPubMed(queryOptions) {
                 endDateFormatted = `${year.toString().padStart(4, '0')}/${month.toString().padStart(2, '0')}/${lastDayOfMonth.toString().padStart(2, '0')}`;
             }
 
-            console.log(`Date filter: ${startDateFormatted} to ${endDateFormatted}`);
+            console.log('PubMed 날짜 쿼리:', startDateFormatted, endDateFormatted);
             searchTerms.push(`("${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication])`);
         } catch (error) {
             console.error('Date processing error:', error);
@@ -75,6 +75,7 @@ async function searchPubMed(queryOptions) {
     }
     
     const searchTerm = searchTerms.join(" AND ");
+    console.log('최종 PubMed 쿼리:', searchTerm);
     
     try {
         // ESearch로 ID 목록 가져오기
