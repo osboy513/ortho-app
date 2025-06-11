@@ -305,14 +305,24 @@ function parseArticleXml(xmlText) {
         let abstract = Array.from(abstractNodes).map(node => {
             const label = node.getAttribute('Label');
             const text = node.textContent;
-
             return label ? `<strong>${label.trim()}:</strong> ${text}` : text;
         }).join('<br><br>');
         if (!abstract) abstract = 'No abstract information.';
         
         const publicationDate = parsePublicationDate(articleNode);
 
-        articles.push({ pmid, title, authors, journalName, abstract, publicationDate });
+        // DOI 추출
+        let doi = '';
+        const articleIdNodes = articleNode.querySelectorAll('ArticleIdList > ArticleId');
+        articleIdNodes.forEach(idNode => {
+            if (idNode.getAttribute('IdType') === 'doi') {
+                doi = idNode.textContent;
+            }
+        });
+        // PubMed 링크
+        const pmidLink = pmid !== 'N/A' ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : '';
+
+        articles.push({ pmid, title, authors, journalName, abstract, publicationDate, doi, pmidLink });
     });
 
     return articles;
@@ -332,4 +342,90 @@ async function searchNCBI(queryOptions) {
     }
 }
 
-export { searchNCBI, getOpenAISummary };
+// PubMed history 기능을 활용해 전체 논문을 export용으로 가져오는 함수
+async function fetchAllArticlesForExport(queryOptions) {
+    // PubMed 쿼리 생성 (searchPubMed와 동일하게)
+    let searchTerms = [];
+    if (queryOptions.journals && queryOptions.journals.length > 0) {
+        const journalQuery = queryOptions.journals.map(journal => `"${journal}"[Journal]`).join(' OR ');
+        searchTerms.push(`(${journalQuery})`);
+    }
+    // 날짜 필터
+    if (queryOptions.startDate && queryOptions.endDate) {
+        try {
+            const [startYear, startMonth] = queryOptions.startDate.split('-').map(Number);
+            const [endYear, endMonth] = queryOptions.endDate.split('-').map(Number);
+            const startDateFormatted = `${startYear}/${String(startMonth).padStart(2, '0')}/01`;
+            const lastDayOfMonth = new Date(endYear, endMonth, 0).getDate();
+            const endDateFormatted = `${endYear}/${String(endMonth).padStart(2, '0')}/${String(lastDayOfMonth).padStart(2, '0')}`;
+            const dateQuery = [
+                `"${startDateFormatted}"[Date - Entrez] : "${endDateFormatted}"[Date - Entrez]`,
+                `"${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication]`,
+                `"${startDateFormatted}"[Date - Create] : "${endDateFormatted}"[Date - Create]`
+            ].join(' OR ');
+            searchTerms.push(`(${dateQuery})`);
+        } catch (error) {
+            // 날짜 처리 실패 시 무시
+        }
+    }
+    if (queryOptions.term && queryOptions.term.trim()) {
+        searchTerms.push(`(${queryOptions.term})`);
+    }
+    if (searchTerms.length === 0) {
+        searchTerms.push("orthopedics[MeSH Terms]");
+    }
+    const searchTerm = searchTerms.join(" AND ");
+
+    // 1. ESearch로 전체 pmid 목록 및 WebEnv/QueryKey 확보
+    const params = new URLSearchParams({
+        db: 'pubmed',
+        term: searchTerm,
+        usehistory: 'y',
+        retmax: 0
+    });
+    const esearchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?${params.toString()}`;
+    const esearchRes = await fetch(esearchUrl);
+    const esearchText = await esearchRes.text();
+    const esearchXml = new window.DOMParser().parseFromString(esearchText, 'text/xml');
+    const count = parseInt(esearchXml.querySelector('Count')?.textContent || '0', 10);
+    const webEnv = esearchXml.querySelector('WebEnv')?.textContent;
+    const queryKey = esearchXml.querySelector('QueryKey')?.textContent;
+    if (!webEnv || !queryKey || count === 0) return [];
+
+    // 2. EFetch로 200개씩 반복 요청
+    const articles = [];
+    const batchSize = 200;
+    for (let retstart = 0; retstart < count; retstart += batchSize) {
+        const efetchParams = new URLSearchParams({
+            db: 'pubmed',
+            query_key: queryKey,
+            WebEnv: webEnv,
+            retstart: retstart,
+            retmax: batchSize,
+            rettype: 'xml'
+        });
+        const efetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?${efetchParams.toString()}`;
+        const efetchRes = await fetch(efetchUrl);
+        const efetchText = await efetchRes.text();
+        const batchArticles = parseArticleXml(efetchText);
+        articles.push(...batchArticles);
+    }
+
+    // post-filter: publicationDate가 기간 내에 있는 논문만 반환
+    if (queryOptions.startDate && queryOptions.endDate) {
+        const start = queryOptions.startDate;
+        const end = queryOptions.endDate;
+        // YYYY-MM 또는 YYYY-MM-DD 형식 지원
+        return articles.filter(a => {
+            if (!a.publicationDate) return false;
+            // YYYY-MM-DD, YYYY-MM, YYYY 모두 지원
+            const pub = a.publicationDate.length === 4 ? a.publicationDate + '-01-01'
+                : a.publicationDate.length === 7 ? a.publicationDate + '-01'
+                : a.publicationDate;
+            return pub >= start + '-01' && pub <= end + '-31';
+        });
+    }
+    return articles;
+}
+
+export { searchNCBI, getOpenAISummary, fetchAllArticlesForExport };

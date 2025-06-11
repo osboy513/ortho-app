@@ -1,4 +1,4 @@
-import { searchNCBI, getOpenAISummary } from './api_service.js';
+import { searchNCBI, getOpenAISummary, fetchAllArticlesForExport } from './api_service.js';
 import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults } from './ui_manager.js';
 import { journalCategories } from './journal_data.js';
 
@@ -45,6 +45,68 @@ document.addEventListener('DOMContentLoaded', () => {
             handleSummaryClick(button, abstractText);
         }
     });
+
+    // Expert List 버튼 이벤트 리스너 등록
+    const expertBtn = document.getElementById('expert-list-btn');
+    if (expertBtn) {
+        expertBtn.addEventListener('click', async () => {
+            const spinner = expertBtn.querySelector('.expert-spinner');
+            spinner.classList.remove('hidden');
+            expertBtn.disabled = true;
+            try {
+                // 기간/저널 선택값 추출
+                const startDate = document.getElementById('start-date')?.value;
+                const endDate = document.getElementById('end-date')?.value;
+                const checkedJournals = Array.from(document.querySelectorAll('.journal-checkbox:checked')).map(cb => cb.getAttribute('data-journal-name'));
+                if (!startDate || !endDate || checkedJournals.length === 0) {
+                    alert('기간과 저널을 모두 선택해 주세요.');
+                    return;
+                }
+                // 검색어(키워드)도 포함
+                const keywords = document.getElementById('keywords')?.value || '';
+                // 논문 전체 데이터 fetch
+                const articles = await fetchAllArticlesForExport({
+                    startDate,
+                    endDate,
+                    journals: checkedJournals,
+                    term: keywords
+                });
+                if (!articles.length) {
+                    alert('해당 조건에 맞는 논문이 없습니다.');
+                    return;
+                }
+                // CSV 변환
+                const rows = [
+                    ['제목', '저자', '저널명', '출간일', 'DOI', '논문 링크']
+                ];
+                articles.forEach(a => {
+                    rows.push([
+                        a.title || '',
+                        a.authors || '',
+                        a.journalName || '',
+                        a.publicationDate || '',
+                        a.doi || '',
+                        a.pmidLink || ''
+                    ]);
+                });
+                const csvContent = rows.map(row => row.map(field => '"' + (field || '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'Expert_List.csv';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('논문 내보내기 중 오류 발생: ' + (e.message || e));
+            } finally {
+                spinner.classList.add('hidden');
+                expertBtn.disabled = false;
+            }
+        });
+    }
 });
 
 // 설정 관리 초기화 함수
@@ -659,11 +721,9 @@ function setupJournalFilters(container) {
             
             // 무한 스크롤 설정
             function setupInfiniteScroll(sentinel, container, callback) {
-                // 모바일과 데스크톱 분기
-                const isMobile = window.matchMedia('(max-width: 767px)').matches;
-                
+                // 맥북(데스크탑)과 아이폰(모바일) 모두 window 스크롤 기준으로 동작하도록 root를 null로 고정
                 const observerOptions = {
-                    root: isMobile ? null : container,
+                    root: null, // 항상 window 기준
                     rootMargin: '0px 0px 400px 0px',
                     threshold: 0.01
                 };
@@ -671,7 +731,6 @@ function setupJournalFilters(container) {
                 const observer = new IntersectionObserver((entries) => {
                     entries.forEach(entry => {
                         if (entry.isIntersecting) {
-                            console.log("Sentinel intersecting:", entry.isIntersecting, "Intersection ratio:", entry.intersectionRatio);
                             callback();
                         }
                     });
@@ -679,21 +738,7 @@ function setupJournalFilters(container) {
 
                 if (sentinel) {
                     observer.observe(sentinel);
-                    console.log("IntersectionObserver attached to sentinel");
                 }
-                
-                // 윈도우 리사이즈 시 observer 재설정
-                let resizeTimer;
-                window.addEventListener('resize', () => {
-                    clearTimeout(resizeTimer);
-                    resizeTimer = setTimeout(() => {
-                        const newIsMobile = window.matchMedia('(max-width: 767px)').matches;
-                        if (newIsMobile !== isMobile) {
-                            observer.disconnect();
-                            setupInfiniteScroll(sentinel, container, callback);
-                        }
-                    }, 250);
-                });
             }
             
             // 검색 버튼 상태 업데이트
