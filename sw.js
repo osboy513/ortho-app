@@ -23,46 +23,33 @@ self.addEventListener('install', event => {
 
 // 네트워크 요청 가로채기
 self.addEventListener('fetch', event => {
+  const requestUrl = new URL(event.request.url);
+
+  // 교차 출처 요청이나 GET 이외의 메소드는 처리하지 않음
+  if (requestUrl.origin !== location.origin || event.request.method !== 'GET') {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // 캐시에 있으면 캐시된 응답 반환
         if (response) {
           return response;
         }
-        
-        // 없으면 네트워크 요청
+
         return fetch(event.request)
-          .then(response => {
-            // 유효한 응답이 아니면 그냥 반환
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
+          .then(networkResponse => {
+            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+              return networkResponse;
             }
-            
-            // 응답 복제 (스트림은 한 번만 사용 가능)
-            const responseToCache = response.clone();
-            
-            // 응답 캐싱
+
+            const responseToCache = networkResponse.clone();
             caches.open(CACHE_NAME)
               .then(cache => {
-                // API 요청은 캐시하지 않음
-                if (!event.request.url.includes('/api/')) {
-                  cache.put(event.request, responseToCache);
-                }
+                cache.put(event.request, responseToCache);
               });
-            
-            return response;
-          })
-          .catch(() => {
-            // 네트워크 오류 시 오프라인 페이지 제공 (API 요청인 경우)
-            if (event.request.url.includes('/api/')) {
-              return new Response(JSON.stringify({ 
-                error: true, 
-                message: '오프라인 상태입니다. 네트워크 연결을 확인하세요.' 
-              }), {
-                headers: { 'Content-Type': 'application/json' }
-              });
-            }
+
+            return networkResponse;
           });
       })
   );
