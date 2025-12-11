@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ortho-paper-v1';
+const CACHE_NAME = 'ortho-paper-v2';
 const urlsToCache = [
   './',
   './index.html',
@@ -30,7 +30,7 @@ self.addEventListener('fetch', event => {
         if (response) {
           return response;
         }
-        
+
         // 없으면 네트워크 요청
         return fetch(event.request)
           .then(response => {
@@ -38,10 +38,10 @@ self.addEventListener('fetch', event => {
             if (!response || response.status !== 200 || response.type !== 'basic') {
               return response;
             }
-            
+
             // 응답 복제 (스트림은 한 번만 사용 가능)
             const responseToCache = response.clone();
-            
+
             // 응답 캐싱
             caches.open(CACHE_NAME)
               .then(cache => {
@@ -50,15 +50,15 @@ self.addEventListener('fetch', event => {
                   cache.put(event.request, responseToCache);
                 }
               });
-            
+
             return response;
           })
           .catch(() => {
             // 네트워크 오류 시 오프라인 페이지 제공 (API 요청인 경우)
             if (event.request.url.includes('/api/')) {
-              return new Response(JSON.stringify({ 
-                error: true, 
-                message: '오프라인 상태입니다. 네트워크 연결을 확인하세요.' 
+              return new Response(JSON.stringify({
+                error: true,
+                message: '오프라인 상태입니다. 네트워크 연결을 확인하세요.'
               }), {
                 headers: { 'Content-Type': 'application/json' }
               });
