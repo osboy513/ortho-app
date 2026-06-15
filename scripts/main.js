@@ -11,10 +11,39 @@ const CONFIG = {
 
 // 서비스 워커 등록
 if ('serviceWorker' in navigator) {
+    let refreshingForServiceWorker = false;
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshingForServiceWorker) {
+            return;
+        }
+        refreshingForServiceWorker = true;
+        window.location.reload();
+    });
+
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .then(registration => {
+        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+            .then(async registration => {
                 console.log('서비스 워커가 등록되었습니다:', registration.scope);
+
+                if (registration.waiting) {
+                    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }
+
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    if (!newWorker) {
+                        return;
+                    }
+
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                        }
+                    });
+                });
+
+                await registration.update();
             })
             .catch(error => {
                 console.error('서비스 워커 등록 실패:', error);
