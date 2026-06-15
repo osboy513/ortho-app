@@ -1,6 +1,14 @@
 const ESEARCH_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi';
 const EFETCH_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi';
-const NCBI_API_KEY = 'cf411c1cb35812683dc54567728468d10b07'; // NCBI API 키는 공개 사용 가능하므로 유지
+const NCBI_API_KEY = '';
+
+function buildNcbiQuery(params) {
+    const searchParams = new URLSearchParams(params);
+    if (NCBI_API_KEY) {
+        searchParams.set('api_key', NCBI_API_KEY);
+    }
+    return searchParams.toString();
+}
 
 /**
  * PubMed API에 직접 요청하는 함수
@@ -70,7 +78,14 @@ async function searchPubMed(queryOptions) {
     
     try {
         // ESearch로 ID 목록 가져오기
-        const searchUrl = `${ESEARCH_URL}?db=pubmed&term=${encodeURIComponent(searchTerm)}&retstart=${retstart}&retmax=${retmax}&sort=pub+date&api_key=${NCBI_API_KEY}&retmode=json`;
+        const searchUrl = `${ESEARCH_URL}?${buildNcbiQuery({
+            db: 'pubmed',
+            term: searchTerm,
+            retstart,
+            retmax,
+            sort: 'pub date',
+            retmode: 'json'
+        })}`;
         
         const searchResponse = await fetch(searchUrl);
         if (!searchResponse.ok) {
@@ -86,7 +101,11 @@ async function searchPubMed(queryOptions) {
         }
         
         // EFetch로 논문 상세 정보 가져오기
-        const fetchUrl = `${EFETCH_URL}?db=pubmed&id=${ids.join(",")}&retmode=xml&api_key=${NCBI_API_KEY}`;
+        const fetchUrl = `${EFETCH_URL}?${buildNcbiQuery({
+            db: 'pubmed',
+            id: ids.join(','),
+            retmode: 'xml'
+        })}`;
         
         const fetchResponse = await fetch(fetchUrl);
         if (!fetchResponse.ok) {
@@ -103,89 +122,6 @@ async function searchPubMed(queryOptions) {
     } catch (error) {
         console.error("PubMed API Error:", error);
         throw error;
-    }
-}
-
-/**
- * OpenAI API를 통해 요약 생성 - API 키를 파라미터로 받음
- * @param {string} abstractText - 요약할 초록 텍스트
- * @param {string} openaiApiKey - OpenAI API 키
- * @returns {Promise<string>} 요약된 텍스트 또는 오류 메시지
- */
-async function getOpenAISummary(abstractText, openaiApiKey) {
-    // API 키 검증
-    if (!openaiApiKey || !openaiApiKey.trim()) {
-        throw new Error("OpenAI API 키가 제공되지 않았습니다. 설정 탭에서 API 키를 입력해주세요.");
-    }
-
-    // API 키 형식 간단 검증
-    if (!openaiApiKey.startsWith('sk-')) {
-        throw new Error("유효하지 않은 OpenAI API 키 형식입니다. 키는 'sk-'로 시작해야 합니다.");
-    }
-
-    if (!abstractText || abstractText.trim() === '' || abstractText === 'No abstract information.' || abstractText === '초록 정보 없음.') {
-        return '초록 내용이 없어 요약할 수 없습니다.';
-    }
-
-    const MAX_ABSTRACT_LENGTH = 4000; 
-    let processedAbstract = abstractText.replace(new RegExp('<[^>]*>?', 'gm'), ' '); 
-    processedAbstract = processedAbstract.replace(new RegExp('\\s\\s+', 'g'), ' ').trim(); 
-
-    if (processedAbstract.length > MAX_ABSTRACT_LENGTH) {
-        let cutPoint = processedAbstract.lastIndexOf(' ', MAX_ABSTRACT_LENGTH);
-        if (cutPoint === -1 || cutPoint < MAX_ABSTRACT_LENGTH / 2) cutPoint = MAX_ABSTRACT_LENGTH;
-        processedAbstract = processedAbstract.substring(0, cutPoint) + "... (내용이 길어 일부만 요약)";
-    }
-    
-    try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${openaiApiKey}` // 전달받은 API 키 사용
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o',
-                messages: [
-                    {
-                        role: 'system',
-                        content: '당신은 의학 논문 초록을 요약하는 전문가입니다. 한국어로 간결하게 요약해주세요. 의학용어, 해부학용어, 의료기기명, 약품명 등은 영어 그대로 유지하고 한글로 번역하지 마세요.'
-                    },
-                    {
-                        role: 'user',
-                        content: `다음 의학 논문 초록을 한국어로 3-4문장으로 간결하게 요약해주세요. 의학용어, 해부학용어, 의료기기명, 약품명은 영어 그대로 유지해주세요: "${processedAbstract}"`
-                    }
-                ],
-                temperature: 0.1
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            
-            // 구체적인 에러 메시지 제공
-            if (response.status === 401) {
-                throw new Error("API 키가 유효하지 않습니다. 설정에서 올바른 OpenAI API 키를 입력해주세요.");
-            } else if (response.status === 429) {
-                throw new Error("API 사용 한도를 초과했습니다. 잠시 후 다시 시도해주세요.");
-            } else if (response.status === 403) {
-                throw new Error("API 키에 필요한 권한이 없습니다. OpenAI 계정을 확인해주세요.");
-            } else {
-                throw new Error(errorData.error?.message || `OpenAI API 오류: ${response.status}`);
-            }
-        }
-
-        const data = await response.json();
-        return data.choices[0].message.content.trim();
-    } catch (error) {
-        console.error('OpenAI API Error:', error);
-        
-        // 네트워크 오류 등 기타 오류 처리
-        if (error.name === 'TypeError' && error.message.includes('fetch')) {
-            throw new Error('네트워크 연결 오류가 발생했습니다. 인터넷 연결을 확인해주세요.');
-        }
-        
-        throw error; // 이미 처리된 오류는 그대로 전달
     }
 }
 
@@ -305,8 +241,8 @@ function parseArticleXml(xmlText) {
         let abstract = Array.from(abstractNodes).map(node => {
             const label = node.getAttribute('Label');
             const text = node.textContent;
-            return label ? `<strong>${label.trim()}:</strong> ${text}` : text;
-        }).join('<br><br>');
+            return label ? `${label.trim()}: ${text}` : text;
+        }).join('\n\n');
         if (!abstract) abstract = 'No abstract information.';
         
         const publicationDate = parsePublicationDate(articleNode);
@@ -428,4 +364,4 @@ async function fetchAllArticlesForExport(queryOptions) {
     return articles;
 }
 
-export { searchNCBI, getOpenAISummary, fetchAllArticlesForExport };
+export { searchNCBI, fetchAllArticlesForExport };

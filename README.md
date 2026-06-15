@@ -7,15 +7,46 @@ NCBI PubMed와 AI를 활용한 정형외과 SCI 저널 논문 검색 및 요약 
 - 다양한 정형외과 관련 SCI 저널에서 논문 검색
 - 발행일 기반 필터링
 - 키워드 검색
-- 논문 초록 AI 요약 기능
+- 서버리스 기반 논문 초록 AI 근거 요약 기능
+- 브라우저에 OpenAI API 키를 저장하지 않는 보안 구조
+- PMID/model/prompt version 기반 요약 캐싱
 - 모바일 친화적 반응형 디자인
 - PWA(Progressive Web App) 지원 - 오프라인 기능 및 홈 화면 설치 가능
+
+## v2.0 보안 요약 구조
+
+v2.0부터 OpenAI API는 브라우저에서 직접 호출하지 않습니다. 프론트엔드는 논문 제목, PMID, 초록만 `/api/summarize`로 보내고, 서버리스 함수가 환경변수의 `OPENAI_API_KEY`로 OpenAI API를 호출합니다.
+
+요약 프롬프트는 초록에 근거한 내용만 반환하도록 제한되어 있으며, 결과는 다음 구조로 렌더링됩니다.
+
+- Clinical relevance
+- Key points
+- Limitations
+- Confidence
+
+## Vercel 배포 환경변수
+
+Vercel 프로젝트의 Settings > Environment Variables에 아래 값을 등록하세요.
+
+```bash
+OPENAI_API_KEY=sk-your-openai-api-key
+OPENAI_MODEL=gpt-5.4-mini
+SUMMARY_CACHE_TTL_SECONDS=2592000
+SUMMARY_RATE_LIMIT=30
+```
+
+서버 간 지속 캐시가 필요하면 Upstash Redis 값을 추가로 등록할 수 있습니다.
+
+```bash
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
 
 ## 아이폰에서 웹앱 사용하기
 
 ### 웹 호스팅 방법
 
-이 웹앱은 GitHub Pages, Netlify, Vercel 등의 정적 웹사이트 호스팅 서비스를 통해 배포할 수 있습니다.
+AI 요약 기능까지 사용하려면 Vercel처럼 `/api/*` 서버리스 함수를 지원하는 호스팅을 사용해야 합니다. GitHub Pages 같은 정적 호스팅에서는 PubMed 검색은 가능하지만 AI 요약 API는 동작하지 않습니다.
 
 #### GitHub Pages 배포 방법
 
@@ -35,26 +66,33 @@ NCBI PubMed와 AI를 활용한 정형외과 SCI 저널 논문 검색 및 요약 
 
 ## 개발 정보
 
-- HTML, CSS, JavaScript로 개발된 클라이언트 측 웹앱
+- HTML, CSS, JavaScript와 Vercel 서버리스 함수로 개발된 웹앱
 - Tailwind CSS를 활용한 UI 디자인
 - NCBI PubMed API를 통한 논문 검색
-- OpenAI API를 통한 논문 요약
+- OpenAI Responses API를 통한 논문 요약
 - PWA 기능 - 서비스 워커, 매니페스트 파일, 앱 아이콘 포함
 
 ## 로컬에서 실행하기
 
-로컬 개발 서버를 실행하려면:
+의존성을 설치한 뒤 Vercel 개발 서버를 실행하면 `/api/summarize`까지 함께 테스트할 수 있습니다.
 
 ```bash
-# http-server가 설치되어 있지 않은 경우
-npm install -g http-server
+npm install
+cp .env.example .env.local
 
-# 프로젝트 루트 디렉토리에서 실행
-http-server
+npm run dev
 ```
 
 브라우저에서 `http://localhost:8080`으로 접속하여 웹앱을 확인할 수 있습니다.
 
+정적 화면만 확인하려면 아래 명령을 사용할 수 있습니다.
+
+```bash
+npm run start:static
+```
+
+이 경우 AI 요약 API는 사용할 수 없습니다.
+
 ## 라이선스
 
-MIT 
+MIT

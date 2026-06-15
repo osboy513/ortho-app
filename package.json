@@ -1,18 +1,29 @@
 {
   "name": "ortho-app",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "정형외과 SCI 저널 논문 뷰어 웹앱",
+  "type": "module",
   "main": "index.html",
   "scripts": {
     "start": "http-server . -p 8080 -o",
-    "dev": "http-server . -p 8080 -o",
+    "dev": "npx vercel dev --listen 8080",
+    "start:static": "http-server . -p 8080 -o",
     "build:icons": "node convert-icons.js"
   },
-  "keywords": ["orthopedics", "medical", "journal", "pubmed", "pwa"],
+  "keywords": [
+    "orthopedics",
+    "medical",
+    "journal",
+    "pubmed",
+    "pwa"
+  ],
   "author": "osboy",
   "license": "MIT",
+  "dependencies": {
+    "openai": "^6.42.0"
+  },
   "devDependencies": {
     "http-server": "^14.1.1",
-    "sharp": "^0.33.0"
+    "sharp": "^0.35.1"
   }
-} 
+}

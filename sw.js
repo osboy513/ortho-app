@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ortho-paper-v2';
+const CACHE_NAME = 'ortho-paper-v3';
 const urlsToCache = [
   './',
   './index.html',
@@ -6,6 +6,8 @@ const urlsToCache = [
   './manifest.json',
   './scripts/main.js',
   './scripts/api_service.js',
+  './scripts/summary_service.js',
+  './scripts/ui_manager.js',
   './icons/icon-192x192.png',
   './icons/icon-512x512.png'
 ];
@@ -82,4 +84,4 @@ self.addEventListener('activate', event => {
       );
     })
   );
-}); 
+});

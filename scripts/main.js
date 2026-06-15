@@ -1,4 +1,5 @@
-import { searchNCBI, getOpenAISummary, fetchAllArticlesForExport } from './api_service.js';
+import { searchNCBI, fetchAllArticlesForExport } from './api_service.js';
+import { getSummaryServiceStatus } from './summary_service.js';
 import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults } from './ui_manager.js';
 import { journalCategories } from './journal_data.js';
 
@@ -33,18 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
-
-    // 요약 버튼 이벤트 리스너 (동적 생성 카드 대응)
-    document.addEventListener('click', (event) => {
-        if (event.target.matches('.summary-button')) {
-            const button = event.target;
-            const articleCard = button.closest('.article-card');
-            const abstractElement = articleCard.querySelector('.abstract-content');
-            const abstractText = abstractElement.textContent;
-
-            handleSummaryClick(button, abstractText);
-        }
-    });
 
     // Export List 버튼 이벤트 리스너 등록
     const exportBtn = document.getElementById('export-list-btn');
@@ -111,153 +100,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 설정 관리 초기화 함수
 function initSettings() {
-    const apiKeyInput = document.getElementById('api-key-input');
-    const saveApiKeyBtn = document.getElementById('save-api-key-btn');
-    const apiKeyStatus = document.getElementById('api-key-status');
+    const statusElement = document.getElementById('summary-service-status');
+    const modelElement = document.getElementById('summary-service-model');
+    const cacheElement = document.getElementById('summary-service-cache');
+    const refreshButton = document.getElementById('check-summary-service-btn');
 
-    if (!apiKeyInput || !saveApiKeyBtn || !apiKeyStatus) {
+    if (!statusElement || !modelElement || !cacheElement || !refreshButton) {
         console.warn('설정 UI 요소를 찾을 수 없습니다.');
         return;
     }
 
-    // 페이지 로드 시 저장된 API 키 상태 확인
-    updateApiKeyStatus();
+    async function updateSummaryServiceStatus(forceRefresh = false) {
+        statusElement.textContent = '요약 서비스 상태 확인 중...';
+        statusElement.className = 'rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700';
+        refreshButton.disabled = true;
 
-    // API 키 저장 버튼 이벤트
-    saveApiKeyBtn.addEventListener('click', handleApiKeySave);
+        const status = await getSummaryServiceStatus(forceRefresh);
 
-    // Enter 키로 저장 가능하도록
-    apiKeyInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleApiKeySave();
-        }
-    });
-
-    // API 키 저장 처리 함수
-    function handleApiKeySave() {
-        const apiKey = apiKeyInput.value.trim();
-
-        if (apiKey) {
-            // API 키 형식 검증
-            if (apiKey.startsWith('sk-') && apiKey.length > 20) {
-                localStorage.setItem('openai_api_key', apiKey);
-                showApiKeyStatus('✓ API 키가 성공적으로 저장되었습니다!', 'success');
-                apiKeyInput.value = ''; // 보안을 위해 입력 필드 비우기
-
-                // 2초 후 일반 상태 메시지로 변경
-                setTimeout(() => {
-                    updateApiKeyStatus();
-                }, 2000);
-            } else {
-                showApiKeyStatus('⚠ 올바른 API 키 형식이 아닙니다. (sk-로 시작해야 함)', 'error');
-            }
+        if (status.configured) {
+            statusElement.textContent = '사용 가능: 서버 환경변수 OPENAI_API_KEY가 설정되어 있습니다.';
+            statusElement.className = 'rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 border border-emerald-200';
+        } else if (status.unavailable) {
+            statusElement.textContent = '연결 불가: Vercel/서버리스 환경에서 실행 중인지 확인해주세요.';
+            statusElement.className = 'rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700 border border-amber-200';
         } else {
-            // 빈 값인 경우 API 키 삭제
-            localStorage.removeItem('openai_api_key');
-            showApiKeyStatus('✓ API 키가 삭제되었습니다.', 'info');
-
-            setTimeout(() => {
-                updateApiKeyStatus();
-            }, 2000);
-        }
-    }
-
-    // API 키 상태 업데이트 함수
-    function updateApiKeyStatus() {
-        const savedApiKey = localStorage.getItem('openai_api_key');
-        if (savedApiKey && savedApiKey.trim()) {
-            apiKeyInput.value = savedApiKey; // 저장된 키를 입력 필드에 표시
-            showApiKeyStatus('✓ API 키가 저장되어 있습니다.', 'success');
-        } else {
-            apiKeyInput.value = '';
-            showApiKeyStatus('⚠ API 키가 설정되지 않았습니다.', 'warning');
-        }
-    }
-
-    // API 키 상태 메시지 표시 함수
-    function showApiKeyStatus(message, type) {
-        apiKeyStatus.textContent = message;
-
-        // 기존 색상 관련 클래스 모두 제거
-        apiKeyStatus.classList.remove('text-green-600', 'text-red-600', 'text-orange-600', 'text-gray-600');
-
-        // 타입에 따른 클래스 추가
-        switch (type) {
-            case 'success':
-                apiKeyStatus.classList.add('text-green-600');
-                break;
-            case 'error':
-                apiKeyStatus.classList.add('text-red-600');
-                break;
-            case 'warning':
-                apiKeyStatus.classList.add('text-orange-600');
-                break;
-            case 'info':
-            default:
-                apiKeyStatus.classList.add('text-gray-600');
-        }
-    }
-}
-
-// 요약 생성 핸들러
-async function handleSummaryClick(button, abstractText) {
-    const summaryContainer = button.parentElement.querySelector('.summary-text-content');
-
-    // 이미 요약이 있는 경우 토글
-    if (summaryContainer.textContent && !summaryContainer.classList.contains('summary-error')) {
-        summaryContainer.classList.toggle('hidden');
-        return;
-    }
-
-    // API 키 확인 및 검증
-    const apiKey = localStorage.getItem('openai_api_key');
-    if (!apiKey || !apiKey.trim()) {
-        showSummaryError(summaryContainer, 'API 키가 설정되지 않았습니다. 설정 탭에서 OpenAI API 키를 입력해주세요.');
-        return;
-    }
-
-    if (!apiKey.startsWith('sk-')) {
-        showSummaryError(summaryContainer, 'API 키 형식이 올바르지 않습니다. 설정 탭에서 올바른 API 키를 입력해주세요.');
-        return;
-    }
-
-    // 요약 생성 시작
-    button.disabled = true;
-    button.textContent = '요약 생성 중...';
-    summaryContainer.textContent = '';
-    summaryContainer.classList.remove('hidden', 'summary-error');
-
-    try {
-        const summary = await getOpenAISummary(abstractText, apiKey); // API 키 전달
-        summaryContainer.textContent = summary;
-        summaryContainer.classList.remove('summary-error');
-    } catch (error) {
-        console.error('Summary error:', error);
-        let errorMessage = `요약을 생성하지 못했습니다: ${error.message || '알 수 없는 오류'}`;
-
-        // API 키 관련 오류인 경우 특별 처리
-        if (error.message && (
-            error.message.includes('API 키') ||
-            error.message.includes('401') ||
-            error.message.includes('403') ||
-            error.message.includes('유효하지 않은')
-        )) {
-            errorMessage = `${error.message} 설정 탭에서 API 키를 확인해주세요.`;
+            statusElement.textContent = '설정 필요: 배포 환경에 OPENAI_API_KEY를 등록해주세요.';
+            statusElement.className = 'rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 border border-red-200';
         }
 
-        showSummaryError(summaryContainer, errorMessage);
-    } finally {
-        button.disabled = false;
-        button.textContent = '요약 보기';
+        modelElement.textContent = status.model || 'N/A';
+        cacheElement.textContent = status.cache || 'N/A';
+        refreshButton.disabled = false;
     }
-}
 
-// 요약 에러 표시 함수
-function showSummaryError(container, message) {
-    container.textContent = message;
-    container.classList.add('summary-error');
-    container.classList.remove('hidden');
+    refreshButton.addEventListener('click', () => updateSummaryServiceStatus(true));
+    updateSummaryServiceStatus();
 }
 
 // 초기 UI 설정
@@ -498,14 +375,14 @@ function setupJournalFilters(container) {
     // 저널 카테고리 생성
     journalCategories.forEach(category => {
         const categoryElement = document.createElement('div');
-        categoryElement.className = 'mb-4 border border-[#CBBFB4] rounded-md';
+        categoryElement.className = 'mb-4 border border-[#CBD5D1] rounded-md';
 
         // 카테고리 토글 버튼 생성
         const categoryToggleButton = document.createElement('button');
-        categoryToggleButton.className = 'category-toggle w-full flex justify-between items-center text-left p-2 rounded-t-md bg-[#DCD0C0] hover:bg-[#CBBFB4] transition';
+        categoryToggleButton.className = 'category-toggle w-full flex justify-between items-center text-left p-2 rounded-t-md bg-[#CFE3DC] hover:bg-[#CBD5D1] transition';
         categoryToggleButton.innerHTML = `
             <div class="flex items-center">
-                <input type="checkbox" id="select-all-${category.id}" class="select-all-category h-4 w-4 form-checkbox transition rounded border-[#654321] border-2 text-[#654321] mr-2" data-category-id="${category.id}">
+                <input type="checkbox" id="select-all-${category.id}" class="select-all-category h-4 w-4 form-checkbox transition rounded border-[#1F2937] border-2 text-[#1F2937] mr-2" data-category-id="${category.id}">
                 <label for="select-all-${category.id}" class="flex-grow font-bold">${category.name}</label>
             </div>
             <i data-lucide="chevron-down" class="lucide-icon w-5 h-5"></i>
@@ -530,10 +407,10 @@ function setupJournalFilters(container) {
 
                 // 서브 카테고리 토글 버튼
                 const subCategoryToggleButton = document.createElement('button');
-                subCategoryToggleButton.className = 'subcategory-toggle w-full flex justify-between items-center text-left p-1.5 bg-[#DCD0C0]/60 hover:bg-[#CBBFB4]/70 rounded-md';
+                subCategoryToggleButton.className = 'subcategory-toggle w-full flex justify-between items-center text-left p-1.5 bg-[#CFE3DC]/60 hover:bg-[#CBD5D1]/70 rounded-md';
                 subCategoryToggleButton.innerHTML = `
                     <div class="flex items-center">
-                        <input type="checkbox" id="select-all-${subCategory.id}" class="select-all-subcategory h-4 w-4 form-checkbox transition rounded border-[#654321] border-2 text-[#654321] mr-2" data-subcategory-id="${subCategory.id}">
+                        <input type="checkbox" id="select-all-${subCategory.id}" class="select-all-subcategory h-4 w-4 form-checkbox transition rounded border-[#1F2937] border-2 text-[#1F2937] mr-2" data-subcategory-id="${subCategory.id}">
                         <label for="select-all-${subCategory.id}" class="flex-grow font-semibold text-sm">${subCategory.name}</label>
                     </div>
                     <i data-lucide="chevron-down" class="lucide-icon w-4 h-4"></i>
@@ -549,11 +426,11 @@ function setupJournalFilters(container) {
                     const journalItem = document.createElement('div');
                     journalItem.className = 'flex items-center mt-1';
                     journalItem.innerHTML = `
-                        <input type="checkbox" id="${journal.id}" class="journal-checkbox h-3.5 w-3.5 form-checkbox transition rounded border-[#654321] border-2 text-[#654321] mr-2" 
-                            data-category-id="${category.id}" 
-                            data-subcategory-id="${subCategory.id}" 
+                        <input type="checkbox" id="${journal.id}" class="journal-checkbox h-3.5 w-3.5 form-checkbox transition rounded border-[#1F2937] border-2 text-[#1F2937] mr-2"
+                            data-category-id="${category.id}"
+                            data-subcategory-id="${subCategory.id}"
                             data-journal-name="${journal.abbr || journal.name}">
-                        <label for="${journal.id}" class="text-xs text-[#654321]">${journal.name}</label>
+                        <label for="${journal.id}" class="text-xs text-[#1F2937]">${journal.name}</label>
                     `;
                     journalsList.appendChild(journalItem);
                 });
@@ -612,8 +489,8 @@ function setupJournalFilters(container) {
                 const journalItem = document.createElement('div');
                 journalItem.className = 'flex items-center mt-1';
                 journalItem.innerHTML = `
-                    <input type="checkbox" id="${journal.id}" class="journal-checkbox h-4 w-4 form-checkbox transition rounded border-[#654321] border-2 text-[#654321] mr-2" 
-                        data-category-id="${category.id}" 
+                    <input type="checkbox" id="${journal.id}" class="journal-checkbox h-4 w-4 form-checkbox transition rounded border-[#1F2937] border-2 text-[#1F2937] mr-2"
+                        data-category-id="${category.id}"
                         data-journal-name="${journal.abbr || journal.name}">
                     <label for="${journal.id}" class="text-sm">${journal.name}</label>
                 `;

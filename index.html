@@ -4,80 +4,80 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>정형외과 SCI 저널 논문 뷰어</title>
-    
+
     <!-- PWA 설정 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="정형외과 논문">
-    <meta name="theme-color" content="#F5F5DC" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#654321" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1F2937" media="(prefers-color-scheme: dark)">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152.png">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180x180.png">
     <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
     <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512x512.png">
-    
+
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-[#F5F5DC] text-[#654321] antialiased">
+<body class="bg-[#F7F8FA] text-[#1F2937] antialiased">
     <div class="flex flex-col md:flex-row min-h-screen">
         <!-- Left Panel (Filters) -->
-        <aside class="w-full md:w-[380px] lg:w-[420px] p-4 md:p-5 bg-[#EAE0D5] shadow-lg flex flex-col md:h-screen">
+        <aside class="w-full md:w-[380px] lg:w-[420px] p-4 md:p-5 bg-[#E7F3EF] shadow-lg flex flex-col md:h-screen">
             <header class="mb-5 text-center md:text-left">
-                <h1 class="text-2xl lg:text-3xl font-bold text-[#654321]">정형외과 논문 뷰어</h1>
-                <p class="text-sm text-[#654321]/80 mt-1">NCBI PubMed & AI 요약</p>
+                <h1 class="text-2xl lg:text-3xl font-bold text-[#1F2937]">정형외과 논문 뷰어</h1>
+                <p class="text-sm text-[#1F2937]/80 mt-1">NCBI PubMed & AI 요약</p>
             </header>
-            
+
             <div id="search-form-container" class="space-y-3 mb-4">
                 <div>
-                    <label for="keywords" class="block text-xs font-medium text-[#654321] mb-1">키워드 (선택)</label>
-                    <input type="text" id="keywords" name="keywords" placeholder="예: hip arthroplasty" class="mt-1 block w-full rounded-md border-[#CBBFB4] shadow-sm focus:border-[#8B4513] focus:ring-[#8B4513] sm:text-sm p-2 bg-white text-[#654321] placeholder:text-gray-400">
+                    <label for="keywords" class="block text-xs font-medium text-[#1F2937] mb-1">키워드 (선택)</label>
+                    <input type="text" id="keywords" name="keywords" placeholder="예: hip arthroplasty" class="mt-1 block w-full rounded-md border-[#CBD5D1] shadow-sm focus:border-[#0F766E] focus:ring-[#0F766E] sm:text-sm p-2 bg-white text-[#1F2937] placeholder:text-gray-400">
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label for="start-date" class="block text-xs font-medium text-[#654321] mb-1">등록 연월 (시작)</label>
-                        <input type="month" id="start-date" name="start-date" class="mt-1 block w-full rounded-md border-[#CBBFB4] shadow-sm focus:border-[#8B4513] focus:ring-[#8B4513] sm:text-sm p-2 bg-white text-[#654321]">
+                        <label for="start-date" class="block text-xs font-medium text-[#1F2937] mb-1">등록 연월 (시작)</label>
+                        <input type="month" id="start-date" name="start-date" class="mt-1 block w-full rounded-md border-[#CBD5D1] shadow-sm focus:border-[#0F766E] focus:ring-[#0F766E] sm:text-sm p-2 bg-white text-[#1F2937]">
                     </div>
                     <div>
-                        <label for="end-date" class="block text-xs font-medium text-[#654321] mb-1">등록 연월 (종료)</label>
-                        <input type="month" id="end-date" name="end-date" class="mt-1 block w-full rounded-md border-[#CBBFB4] shadow-sm focus:border-[#8B4513] focus:ring-[#8B4513] sm:text-sm p-2 bg-white text-[#654321]">
+                        <label for="end-date" class="block text-xs font-medium text-[#1F2937] mb-1">등록 연월 (종료)</label>
+                        <input type="month" id="end-date" name="end-date" class="mt-1 block w-full rounded-md border-[#CBD5D1] shadow-sm focus:border-[#0F766E] focus:ring-[#0F766E] sm:text-sm p-2 bg-white text-[#1F2937]">
                     </div>
                 </div>
-                 <button id="search-button" class="w-full bg-[#654321] hover:bg-[#8B4513] text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center text-sm">
+                 <button id="search-button" class="w-full bg-[#1F2937] hover:bg-[#0F766E] text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center text-sm">
                     <i data-lucide="search" class="mr-2 h-4 w-4 search-icon"></i>
                     <span class="search-text">검색</span>
                     <div class="spinner hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 </button>
-                <button id="export-list-btn" class="w-full bg-[#8B4513] hover:bg-[#654321] text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center text-sm mt-2">
+                <button id="export-list-btn" class="w-full bg-[#0F766E] hover:bg-[#1F2937] text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center text-sm mt-2">
                     <i data-lucide="download" class="mr-2 h-4 w-4"></i>
                     <span>Export List</span>
                     <div class="export-spinner hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
                 </button>
             </div>
-            
-            <label class="block text-sm font-semibold text-[#654321] mb-2">저널 선택 (하나 이상)</label>
+
+            <label class="block text-sm font-semibold text-[#1F2937] mb-2">저널 선택 (하나 이상)</label>
             <div id="journal-filter-container" class="flex-grow overflow-y-auto space-y-2 pr-1 journal-list-scrollbar">
                 <!-- Journal categories will be populated by JS or listed here -->
             </div>
-             <div class="mt-auto pt-3 text-center text-xs text-[#654321]/70">
+                <div class="mt-auto pt-3 text-center text-xs text-[#1F2937]/70">
                 <p>&copy; <span id="current-year"></span> Orthopedic Viewer. Powered by NCBI & OpenAI.</p>
-                <p class="mt-1">독립형 모바일 앱 버전 v1.0</p>
-                <button id="refresh-app" class="mt-2 text-xs text-[#654321]/80 underline">앱 새로고침</button>
+                <p class="mt-1">독립형 모바일 앱 버전 v2.0</p>
+                <button id="refresh-app" class="mt-2 text-xs text-[#1F2937]/80 underline">앱 새로고침</button>
             </div>
         </aside>
 
         <!-- Right Panel (Results and Settings) -->
         <div id="right-panel-scroller" class="w-full flex-1 p-4 md:p-6 md:h-screen md:overflow-y-auto">
             <!-- Tab Navigation -->
-            <div class="flex mb-6 border-b border-[#CBBFB4]">
-                <button class="tab-btn py-3 px-6 text-sm font-semibold text-center text-[#654321] border-b-2 border-transparent hover:border-[#8B4513] focus:outline-none transition-colors duration-200 active-tab" data-view="results-panel">
+            <div class="flex mb-6 border-b border-[#CBD5D1]">
+                <button class="tab-btn py-3 px-6 text-sm font-semibold text-center text-[#1F2937] border-b-2 border-transparent hover:border-[#0F766E] focus:outline-none transition-colors duration-200 active-tab" data-view="results-panel">
                     <i data-lucide="search" class="inline w-4 h-4 mr-2"></i>검색 결과
                 </button>
-                <button class="tab-btn py-3 px-6 text-sm font-semibold text-center text-[#654321] border-b-2 border-transparent hover:border-[#8B4513] focus:outline-none transition-colors duration-200" data-view="settings-view">
+                <button class="tab-btn py-3 px-6 text-sm font-semibold text-center text-[#1F2937] border-b-2 border-transparent hover:border-[#0F766E] focus:outline-none transition-colors duration-200" data-view="settings-view">
                     <i data-lucide="settings" class="inline w-4 h-4 mr-2"></i>설정
                 </button>
             </div>
@@ -85,58 +85,66 @@
             <!-- Results Panel (Default View) -->
             <main id="results-panel" class="view">
                 <div id="error-message-container" class="mb-4"></div>
-                <div id="results-count" class="mb-4 text-sm font-medium text-[#654321]"></div>
-                
+                <div id="results-count" class="mb-4 text-sm font-medium text-[#1F2937]"></div>
+
                 <div id="initial-loading-indicator" class="hidden text-center py-8">
                     <div role="status" class="flex justify-center items-center flex-col">
-                        <svg aria-hidden="true" class="w-10 h-10 text-gray-200 animate-spin fill-[#654321]" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <svg aria-hidden="true" class="w-10 h-10 text-gray-200 animate-spin fill-[#1F2937]" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C0 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/>
                             <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0492C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill"/>
                         </svg>
-                        <p class="mt-2 text-sm text-[#654321]">논문 검색 중...</p>
+                        <p class="mt-2 text-sm text-[#1F2937]">논문 검색 중...</p>
                     </div>
                 </div>
                 <div id="articles-list" class="space-y-5">
                     <!-- Article cards will be appended here -->
                 </div>
                 <div id="scroll-sentinel" style="height: 1px; width: 100%;"></div>
-                <div id="infinite-scroll-loader" class="hidden text-center py-4 text-sm text-[#654321]">
+                <div id="infinite-scroll-loader" class="hidden text-center py-4 text-sm text-[#1F2937]">
                     <div class="flex justify-center items-center space-x-2">
-                        <div class="w-4 h-4 border-2 border-[#654321] border-t-transparent rounded-full animate-spin"></div>
+                        <div class="w-4 h-4 border-2 border-[#1F2937] border-t-transparent rounded-full animate-spin"></div>
                         <span>추가 논문 로딩 중...</span>
                     </div>
                 </div>
-                <div id="no-more-results" class="hidden text-center py-4 text-sm text-[#654321]/80">
+                <div id="no-more-results" class="hidden text-center py-4 text-sm text-[#1F2937]/80">
                     더 이상 로드할 논문이 없습니다.
                 </div>
             </main>
 
             <!-- Settings Panel -->
             <div id="settings-view" class="view" style="display:none;">
-                <h2 class="text-xl lg:text-2xl font-bold text-[#654321] mb-6 flex items-center">
+                <h2 class="text-xl lg:text-2xl font-bold text-[#1F2937] mb-6 flex items-center">
                     <i data-lucide="settings" class="w-6 h-6 mr-3"></i>설정
                 </h2>
-                <div class="settings-form-container max-w-md">
-                    <div class="bg-white rounded-lg shadow-md p-6 border border-[#CBBFB4]">
+                <div class="settings-form-container max-w-xl">
+                    <div class="bg-white rounded-lg shadow-md p-6 border border-[#CBD5D1]">
                         <div class="mb-4">
-                            <label for="api-key-input" class="block text-sm font-semibold text-[#654321] mb-2">
-                                <i data-lucide="key" class="inline w-4 h-4 mr-1"></i>OpenAI API Key:
-                            </label>
-                            <input type="password" id="api-key-input" placeholder="sk-..." 
-                                class="w-full rounded-md border-[#CBBFB4] shadow-sm focus:border-[#8B4513] focus:ring-[#8B4513] sm:text-sm p-3 bg-white text-[#654321] placeholder:text-gray-400 transition-colors duration-200">
+                            <h3 class="text-sm font-semibold text-[#1F2937] mb-2 flex items-center">
+                                <i data-lucide="shield-check" class="inline w-4 h-4 mr-1"></i>AI 요약 서비스
+                            </h3>
+                            <p id="summary-service-status" class="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700">상태 확인 전</p>
                         </div>
-                        <button id="save-api-key-btn" 
-                            class="w-full bg-[#654321] hover:bg-[#8B4513] text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out text-sm flex items-center justify-center">
-                            <i data-lucide="save" class="w-4 h-4 mr-2"></i>키 저장
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-4">
+                            <div class="rounded-md bg-[#F7F8FA] border border-[#CBD5D1] p-3">
+                                <dt class="text-xs text-[#1F2937]/70">Model</dt>
+                                <dd id="summary-service-model" class="font-semibold text-[#1F2937]">N/A</dd>
+                            </div>
+                            <div class="rounded-md bg-[#F7F8FA] border border-[#CBD5D1] p-3">
+                                <dt class="text-xs text-[#1F2937]/70">Cache</dt>
+                                <dd id="summary-service-cache" class="font-semibold text-[#1F2937]">N/A</dd>
+                            </div>
+                        </dl>
+                        <button id="check-summary-service-btn"
+                            class="w-full bg-[#1F2937] hover:bg-[#0F766E] disabled:opacity-60 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out text-sm flex items-center justify-center">
+                            <i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>상태 다시 확인
                         </button>
-                        <p id="api-key-status" class="api-key-status-message mt-3 text-sm text-center font-medium"></p>
-                        
-                        <div class="mt-6 pt-4 border-t border-[#CBBFB4]">
-                            <h3 class="text-sm font-semibold text-[#654321] mb-2">안내사항</h3>
-                            <ul class="text-xs text-[#654321]/80 space-y-1">
-                                <li>• API 키는 브라우저에 안전하게 저장됩니다</li>
-                                <li>• 논문 요약 기능 사용을 위해 필요합니다</li>
-                                <li>• OpenAI 계정에서 API 키를 발급받으세요</li>
+
+                        <div class="mt-6 pt-4 border-t border-[#CBD5D1]">
+                            <h3 class="text-sm font-semibold text-[#1F2937] mb-2">안내사항</h3>
+                            <ul class="text-xs text-[#1F2937]/80 space-y-1">
+                                <li>• OpenAI API 키는 브라우저에 저장하지 않습니다</li>
+                                <li>• Vercel Environment Variables에 OPENAI_API_KEY를 등록하세요</li>
+                                <li>• 선택 사항: OPENAI_MODEL, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN</li>
                             </ul>
                         </div>
                     </div>
@@ -151,17 +159,14 @@
         document.getElementById('refresh-app').addEventListener('click', function() {
             window.location.reload();
         });
-        
+
         // iOS에서 touchstart 이벤트 추가
         document.addEventListener('touchstart', function() {}, false);
 
-        // 탭 전환 및 API 키 관리 기능
+        // 탭 전환 기능
         document.addEventListener('DOMContentLoaded', () => {
             const tabButtons = document.querySelectorAll('.tab-btn');
             const views = document.querySelectorAll('.view');
-            const apiKeyInput = document.getElementById('api-key-input');
-            const saveApiKeyBtn = document.getElementById('save-api-key-btn');
-            const apiKeyStatus = document.getElementById('api-key-status');
 
             // 탭 활성화 함수
             function activateTab(viewId) {
@@ -178,15 +183,15 @@
 
                 // 탭 버튼 스타일 업데이트
                 tabButtons.forEach(btn => {
-                    btn.classList.remove('active-tab', 'border-[#8B4513]', 'text-[#8B4513]');
-                    btn.classList.add('border-transparent', 'text-[#654321]');
+                    btn.classList.remove('active-tab', 'border-[#0F766E]', 'text-[#0F766E]');
+                    btn.classList.add('border-transparent', 'text-[#1F2937]');
                 });
 
                 // 활성 탭 스타일 적용
                 const currentTabBtn = document.querySelector(`.tab-btn[data-view="${viewId}"]`);
                 if (currentTabBtn) {
-                    currentTabBtn.classList.add('active-tab', 'border-[#8B4513]', 'text-[#8B4513]');
-                    currentTabBtn.classList.remove('border-transparent', 'text-[#654321]');
+                    currentTabBtn.classList.add('active-tab', 'border-[#0F766E]', 'text-[#0F766E]');
+                    currentTabBtn.classList.remove('border-transparent', 'text-[#1F2937]');
                 }
             }
 
@@ -200,43 +205,6 @@
 
             // 초기 탭 설정 (검색 결과 탭 활성화)
             activateTab('results-panel');
-
-            // API 키 상태 업데이트 함수
-            function updateApiKeyStatus() {
-                const savedApiKey = localStorage.getItem('openai_api_key');
-                if (savedApiKey && savedApiKey.trim()) {
-                    apiKeyInput.value = savedApiKey;
-                    apiKeyStatus.textContent = '✓ API 키가 저장되어 있습니다.';
-                    apiKeyStatus.className = 'api-key-status-message mt-3 text-sm text-center font-medium text-green-600';
-                } else {
-                    apiKeyStatus.textContent = '⚠ API 키가 설정되지 않았습니다.';
-                    apiKeyStatus.className = 'api-key-status-message mt-3 text-sm text-center font-medium text-orange-600';
-                }
-            }
-
-            // 페이지 로드 시 API 키 상태 확인
-            updateApiKeyStatus();
-
-            // API 키 저장 버튼 클릭 이벤트
-            saveApiKeyBtn.addEventListener('click', () => {
-                const apiKey = apiKeyInput.value.trim();
-                
-                if (apiKey) {
-                    // API 키 형식 간단 검증 (sk-로 시작하는지 확인)
-                    if (apiKey.startsWith('sk-') && apiKey.length > 20) {
-                        localStorage.setItem('openai_api_key', apiKey);
-                        apiKeyStatus.textContent = '✓ API 키가 성공적으로 저장되었습니다!';
-                        apiKeyStatus.className = 'api-key-status-message mt-3 text-sm text-center font-medium text-green-600';
-                    } else {
-                        apiKeyStatus.textContent = '⚠ 올바른 API 키 형식이 아닙니다. (sk-로 시작해야 함)';
-                        apiKeyStatus.className = 'api-key-status-message mt-3 text-sm text-center font-medium text-red-600';
-                    }
-                } else {
-                    localStorage.removeItem('openai_api_key');
-                    apiKeyStatus.textContent = '✓ API 키가 삭제되었습니다.';
-                    apiKeyStatus.className = 'api-key-status-message mt-3 text-sm text-center font-medium text-gray-600';
-                }
-            });
 
             // Lucide 아이콘 초기화
             if (typeof lucide !== 'undefined') {

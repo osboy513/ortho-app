@@ -6,131 +6,209 @@ const initialLoadingIndicatorElement = document.getElementById('initial-loading-
 const infiniteScrollLoaderElement = document.getElementById('infinite-scroll-loader');
 const noMoreResultsElement = document.getElementById('no-more-results');
 
+function el(tagName, className = '', text = '') {
+    const element = document.createElement(tagName);
+    if (className) {
+        element.className = className;
+    }
+    if (text) {
+        element.textContent = text;
+    }
+    return element;
+}
 
-function createArticleCard(article) {
-    const card = document.createElement('div');
-    card.className = 'article-card p-4 sm:p-5 rounded-lg shadow-md border border-[#DCD0C0]';
-    
-    let abstractHtml = article.abstract;
-    const isAbstractAvailable = article.abstract && article.abstract !== 'No abstract information.';
-    
-    if (!isAbstractAvailable) {
-        abstractHtml = `<p class="text-sm text-gray-500 italic">초록 정보 없음.</p>`;
-    } else {
-        abstractHtml = `<div class="abstract-content text-sm text-[#654321]">${article.abstract}</div>
-                        <button class="text-xs text-[#654321] hover:underline mt-1.5 expand-abstract-button">자세히 보기</button>`;
+function appendField(container, label, value) {
+    const paragraph = el('p', 'text-xs text-gray-600 mb-0.5');
+    const strong = el('strong', '', `${label}: `);
+    paragraph.append(strong, document.createTextNode(value || 'N/A'));
+    container.appendChild(paragraph);
+}
+
+function appendTextBlocks(container, text, className) {
+    const blocks = String(text || '').split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
+    blocks.forEach(block => {
+        container.appendChild(el('p', className, block));
+    });
+}
+
+function isAbstractAvailable(article) {
+    return Boolean(
+        article.abstract &&
+        article.abstract !== 'No abstract information.' &&
+        article.abstract !== '초록 정보 없음.'
+    );
+}
+
+function createAbstractSection(article) {
+    const wrapper = el('div', 'mb-2.5');
+    wrapper.appendChild(el('h4', 'text-xs font-semibold text-[#1F2937] mb-0.5', '초록:'));
+
+    const textContainer = el('div', 'abstract-text-container');
+    if (!isAbstractAvailable(article)) {
+        textContainer.appendChild(el('p', 'text-sm text-gray-500 italic', '초록 정보 없음.'));
+        wrapper.appendChild(textContainer);
+        return wrapper;
     }
 
-    card.innerHTML = `
-        <h3 class="text-md sm:text-lg font-semibold article-title mb-1.5">${article.title}</h3>
-        <p class="text-xs text-gray-600 mb-0.5"><strong>저자:</strong> ${article.authors}</p>
-        <p class="text-xs text-gray-600 mb-0.5"><strong>저널:</strong> ${article.journalName}</p>
-        <p class="text-xs text-gray-600 mb-2"><strong>출간일:</strong> ${article.publicationDate || 'N/A'}</p>
-        
-        <div class="mb-2.5">
-            <h4 class="text-xs font-semibold text-[#654321] mb-0.5">초록:</h4>
-            <div class="abstract-text-container">${abstractHtml}</div>
-        </div>
+    const abstractContent = el('div', 'abstract-content text-sm text-[#1F2937]');
+    appendTextBlocks(abstractContent, article.abstract, 'mb-2 last:mb-0');
+    textContainer.appendChild(abstractContent);
 
-        <div>
-            <h4 class="text-xs font-semibold text-[#654321] mb-1">AI 한 줄 요약:</h4>
-            <button class="summary-button text-xs bg-[#654321] text-white hover:bg-[#8B4513] py-1 px-2.5 rounded-md transition duration-150 ease-in-out" data-pmid="${article.pmid}" ${!isAbstractAvailable ? 'disabled title="초록 정보가 없어 요약할 수 없습니다."' : ''}>
-                <span class="button-text">요약 보기</span>
-                <span class="button-spinner hidden w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin ml-1.5"></span>
-            </button>
-            <div class="summary-text-content mt-1.5 p-2 rounded-md bg-[#F0EBE4] text-xs text-[#654321]" style="display: none;">
-                <!-- Summary will be loaded here -->
-            </div>
-        </div>
-        <p class="mt-2.5 text-xs text-gray-500">PMID: <a href="https://pubmed.ncbi.nlm.nih.gov/${article.pmid}/" target="_blank" class="text-[#654321] hover:underline">${article.pmid}</a></p>
-    `;
+    const expandButton = el('button', 'text-xs text-[#1F2937] hover:underline mt-1.5 expand-abstract-button', '자세히 보기');
+    expandButton.type = 'button';
+    expandButton.addEventListener('click', () => {
+        abstractContent.classList.toggle('expanded');
+        expandButton.textContent = abstractContent.classList.contains('expanded') ? '간략히 보기' : '자세히 보기';
+    });
+    textContainer.appendChild(expandButton);
+    wrapper.appendChild(textContainer);
 
+    return wrapper;
+}
 
-    const expandButton = card.querySelector('.expand-abstract-button');
-    const abstractContent = card.querySelector('.abstract-content');
-    if (expandButton && abstractContent) {
-        expandButton.addEventListener('click', () => {
-            abstractContent.classList.toggle('expanded');
-            expandButton.textContent = abstractContent.classList.contains('expanded') ? '간략히 보기' : '자세히 보기';
+function setSummaryLoading(button, textElement, spinnerElement, isLoading) {
+    button.disabled = isLoading;
+    textElement.classList.toggle('hidden', isLoading);
+    spinnerElement.classList.toggle('hidden', !isLoading);
+}
+
+function renderSummaryError(container, message) {
+    container.replaceChildren();
+    container.hidden = false;
+    container.dataset.error = 'true';
+    container.dataset.loaded = 'false';
+    container.appendChild(el('p', 'summary-error', message));
+}
+
+function renderSummary(container, data) {
+    const summary = data.summary || {};
+    container.replaceChildren();
+    container.hidden = false;
+    container.dataset.error = 'false';
+    container.dataset.loaded = 'true';
+
+    const meta = el('div', 'mb-3 flex flex-wrap items-center gap-2');
+    meta.appendChild(el('span', 'inline-flex rounded-full bg-[#E7F3EF] px-2 py-0.5 text-[11px] font-semibold text-[#0F766E]', data.cached ? 'Cached' : 'New'));
+    meta.appendChild(el('span', 'text-[11px] text-gray-500', `Model: ${data.model || 'N/A'}`));
+    container.appendChild(meta);
+
+    if (summary.clinical_relevance) {
+        container.appendChild(el('h5', 'text-xs font-semibold text-[#1F2937] mb-1', 'Clinical relevance'));
+        container.appendChild(el('p', 'mb-3 text-sm text-[#1F2937]', summary.clinical_relevance));
+    }
+
+    if (Array.isArray(summary.key_points) && summary.key_points.length > 0) {
+        container.appendChild(el('h5', 'text-xs font-semibold text-[#1F2937] mb-1', 'Key points'));
+        const list = el('ul', 'mb-3 list-disc pl-5 text-sm text-[#1F2937] space-y-1');
+        summary.key_points.forEach(point => {
+            list.appendChild(el('li', '', point));
         });
+        container.appendChild(list);
     }
 
+    if (summary.limitations) {
+        container.appendChild(el('h5', 'text-xs font-semibold text-[#1F2937] mb-1', 'Limitations'));
+        container.appendChild(el('p', 'mb-3 text-sm text-[#1F2937]', summary.limitations));
+    }
 
-    const summaryButton = card.querySelector('.summary-button');
-    const summaryTextContainer = card.querySelector('.summary-text-content');
-    const summaryButtonText = summaryButton.querySelector('.button-text');
-    const summaryButtonSpinner = summaryButton.querySelector('.button-spinner');
+    if (summary.confidence) {
+        const confidence = el('p', 'text-[11px] text-gray-500', `Confidence: ${summary.confidence}`);
+        container.appendChild(confidence);
+    }
+}
 
-    summaryButton.addEventListener('click', async () => {
-        if (summaryTextContainer.style.display !== 'none' && summaryTextContainer.innerHTML !== '' && !summaryTextContainer.dataset.error) { // Already loaded and visible
-             summaryTextContainer.style.display = 'none'; // Hide if shown
-             return;
-        }
-        
-        // API 키 확인
-        const apiKey = localStorage.getItem('openai_api_key');
-        if (!apiKey || !apiKey.trim()) {
-            summaryTextContainer.style.display = 'block';
-            summaryTextContainer.innerHTML = `<p class="summary-error">API 키가 설정되지 않았습니다. 설정에서 OpenAI API 키를 입력해주세요.</p>`;
-            summaryTextContainer.dataset.error = "true";
+function createSummarySection(article) {
+    const wrapper = el('div');
+    wrapper.appendChild(el('h4', 'text-xs font-semibold text-[#1F2937] mb-1', 'AI 근거 요약:'));
+
+    const button = el('button', 'summary-button text-xs bg-[#1F2937] text-white hover:bg-[#0F766E] py-1 px-2.5 rounded-md transition duration-150 ease-in-out');
+    button.type = 'button';
+    button.dataset.pmid = article.pmid || '';
+    button.disabled = !isAbstractAvailable(article);
+    if (!isAbstractAvailable(article)) {
+        button.title = '초록 정보가 없어 요약할 수 없습니다.';
+    }
+
+    const buttonText = el('span', 'button-text', '요약 보기');
+    const spinner = el('span', 'button-spinner hidden w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin ml-1.5');
+    button.append(buttonText, spinner);
+    wrapper.appendChild(button);
+
+    const summaryContainer = el('div', 'summary-text-content mt-1.5 p-3 rounded-md bg-[#EEF5F2] text-xs text-[#1F2937]');
+    summaryContainer.hidden = true;
+    wrapper.appendChild(summaryContainer);
+
+    button.addEventListener('click', async () => {
+        if (summaryContainer.dataset.loaded === 'true' && summaryContainer.dataset.error !== 'true') {
+            summaryContainer.hidden = !summaryContainer.hidden;
             return;
         }
 
-        if (!apiKey.startsWith('sk-')) {
-            summaryTextContainer.style.display = 'block';
-            summaryTextContainer.innerHTML = `<p class="summary-error">API 키 형식이 올바르지 않습니다. 설정에서 올바른 API 키를 입력해주세요.</p>`;
-            summaryTextContainer.dataset.error = "true";
-            return;
-        }
-        
-        summaryButton.disabled = true;
-        summaryButtonText.classList.add('hidden');
-        summaryButtonSpinner.classList.remove('hidden');
-        summaryTextContainer.style.display = 'block';
-        summaryTextContainer.innerHTML = `<em class="text-gray-500">AI 요약 생성 중...</em>`;
-        summaryTextContainer.dataset.error = "false";
+        setSummaryLoading(button, buttonText, spinner, true);
+        summaryContainer.replaceChildren(el('em', 'text-gray-500', 'AI 요약 생성 중...'));
+        summaryContainer.hidden = false;
+        summaryContainer.dataset.error = 'false';
 
         try {
-            const summary = await getOpenAISummary(article.abstract, apiKey);
-            summaryTextContainer.innerHTML = `<p>${summary}</p>`;
+            const summaryData = await getOpenAISummary(article);
+            renderSummary(summaryContainer, summaryData);
         } catch (error) {
             console.error(`Error fetching OpenAI summary for PMID ${article.pmid}:`, error);
-            let errorMessage = `AI 요약 실패: ${error.message}`;
-            
-            // API 키 관련 오류인 경우 특별 처리
-            if (error.message && (
-                error.message.includes('API 키') || 
-                error.message.includes('401') || 
-                error.message.includes('403') ||
-                error.message.includes('유효하지 않은')
-            )) {
-                errorMessage = `${error.message} 설정에서 API 키를 확인해주세요.`;
-            }
-            
-            summaryTextContainer.innerHTML = `<p class="summary-error">${errorMessage}</p>`;
-            summaryTextContainer.dataset.error = "true";
+            renderSummaryError(summaryContainer, `AI 요약 실패: ${error.message || '알 수 없는 오류'}`);
         } finally {
-            summaryButton.disabled = false;
-            summaryButtonText.classList.remove('hidden');
-            summaryButtonSpinner.classList.add('hidden');
+            setSummaryLoading(button, buttonText, spinner, false);
             if (typeof lucide !== 'undefined') {
-                lucide.createIcons(); // In case icons were part of summary/error message
+                lucide.createIcons();
             }
         }
     });
+
+    return wrapper;
+}
+
+function createPmidLink(article) {
+    const paragraph = el('p', 'mt-2.5 text-xs text-gray-500');
+    paragraph.appendChild(document.createTextNode('PMID: '));
+
+    if (article.pmid && article.pmid !== 'N/A') {
+        const link = el('a', 'text-[#1F2937] hover:underline', article.pmid);
+        link.href = article.pmidLink || `https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(article.pmid)}/`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        paragraph.appendChild(link);
+    } else {
+        paragraph.appendChild(document.createTextNode('N/A'));
+    }
+
+    return paragraph;
+}
+
+function createArticleCard(article) {
+    const card = el('div', 'article-card p-4 sm:p-5 rounded-lg shadow-md border border-[#CFE3DC]');
+    card.dataset.pmid = article.pmid || '';
+
+    card.appendChild(el('h3', 'text-md sm:text-lg font-semibold article-title mb-1.5', article.title || 'No title information'));
+    appendField(card, '저자', article.authors);
+    appendField(card, '저널', article.journalName);
+    appendField(card, '출간일', article.publicationDate || 'N/A');
+    card.appendChild(createAbstractSection(article));
+    card.appendChild(createSummarySection(article));
+    card.appendChild(createPmidLink(article));
 
     return card;
 }
 
 function displayArticles(articles, articlesListElement, isNewSearch) {
     if (isNewSearch) {
-        articlesListElement.innerHTML = '';
+        articlesListElement.replaceChildren();
     }
     articles.forEach(article => {
         const articleCard = createArticleCard(article);
         articlesListElement.appendChild(articleCard);
     });
-    lucide.createIcons(); // Create icons for any new cards
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
 }
 
 function appendArticles(articles, articlesListElement) {
@@ -144,7 +222,7 @@ function showInitialLoadingIndicator(show) {
 }
 
 function clearResultsDisplay(articlesListElement = document.getElementById('articles-list')) {
-    if (articlesListElement) articlesListElement.innerHTML = '';
+    if (articlesListElement) articlesListElement.replaceChildren();
     if (resultsCountElement) resultsCountElement.textContent = '';
     clearGlobalError();
 }
@@ -156,23 +234,35 @@ function displayResultsCount(message) {
 }
 
 function displayGlobalError(message) {
-    if (errorMessageContainer) {
-        errorMessageContainer.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md relative" role="alert">
-            <div class="flex">
-                <div class="py-1"><i data-lucide="alert-triangle" class="h-5 w-5 text-red-500 mr-3"></i></div>
-                <div>
-                    <p class="font-bold">오류</p>
-                    <p class="text-sm">${message}</p>
-                </div>
-            </div>
-        </div>`;
-        lucide.createIcons(); 
+    if (!errorMessageContainer) {
+        return;
+    }
+
+    const alert = el('div', 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md relative');
+    alert.setAttribute('role', 'alert');
+
+    const row = el('div', 'flex');
+    const iconWrap = el('div', 'py-1');
+    const icon = el('i', 'h-5 w-5 text-red-500 mr-3');
+    icon.setAttribute('data-lucide', 'alert-triangle');
+    iconWrap.appendChild(icon);
+
+    const textWrap = el('div');
+    textWrap.appendChild(el('p', 'font-bold', '오류'));
+    textWrap.appendChild(el('p', 'text-sm', message));
+
+    row.append(iconWrap, textWrap);
+    alert.appendChild(row);
+    errorMessageContainer.replaceChildren(alert);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
     }
 }
 
 function clearGlobalError() {
     if (errorMessageContainer) {
-        errorMessageContainer.innerHTML = '';
+        errorMessageContainer.replaceChildren();
     }
 }
 
@@ -194,14 +284,13 @@ function hideNoMoreResults() {
     }
 }
 
-
-export { 
-    displayArticles, 
+export {
+    displayArticles,
     appendArticles,
-    showInitialLoadingIndicator, 
-    clearResultsDisplay, 
-    displayResultsCount, 
-    displayGlobalError, 
+    showInitialLoadingIndicator,
+    clearResultsDisplay,
+    displayResultsCount,
+    displayGlobalError,
     clearGlobalError,
     showInfiniteScrollLoader,
     hideInfiniteScrollLoader,
