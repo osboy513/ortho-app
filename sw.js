@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ortho-paper-v3';
+const CACHE_NAME = 'ortho-paper-v4';
 const urlsToCache = [
   './',
   './index.html',
@@ -21,54 +21,69 @@ self.addEventListener('install', event => {
         return cache.addAll(urlsToCache);
       })
   );
+  self.skipWaiting();
 });
 
 // 네트워크 요청 가로채기
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // 캐시에 있으면 캐시된 응답 반환
-        if (response) {
-          return response;
-        }
-
-        // 없으면 네트워크 요청
-        return fetch(event.request)
-          .then(response => {
-            // 유효한 응답이 아니면 그냥 반환
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-
-            // 응답 복제 (스트림은 한 번만 사용 가능)
-            const responseToCache = response.clone();
-
-            // 응답 캐싱
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                // API 요청은 캐시하지 않음
-                if (!event.request.url.includes('/api/')) {
-                  cache.put(event.request, responseToCache);
-                }
-              });
-
-            return response;
-          })
-          .catch(() => {
-            // 네트워크 오류 시 오프라인 페이지 제공 (API 요청인 경우)
-            if (event.request.url.includes('/api/')) {
-              return new Response(JSON.stringify({
-                error: true,
-                message: '오프라인 상태입니다. 네트워크 연결을 확인하세요.'
-              }), {
-                headers: { 'Content-Type': 'application/json' }
-              });
-            }
-          });
-      })
-  );
+  event.respondWith(handleFetch(event.request));
 });
+
+async function handleFetch(request) {
+  const requestUrl = new URL(request.url);
+  const isApiRequest = requestUrl.pathname.startsWith('/api/');
+
+  if (request.method !== 'GET') {
+    return fetch(request).catch(() => createOfflineResponse(isApiRequest));
+  }
+
+  const cachedResponse = await caches.match(request);
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+
+  try {
+    const networkResponse = await fetch(request);
+
+    if (
+      networkResponse &&
+      networkResponse.status === 200 &&
+      networkResponse.type === 'basic' &&
+      !isApiRequest
+    ) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, networkResponse.clone()).catch(() => undefined);
+    }
+
+    return networkResponse || createOfflineResponse(isApiRequest);
+  } catch {
+    if (request.mode === 'navigate') {
+      const offlinePage = await caches.match('./index.html');
+      if (offlinePage) {
+        return offlinePage;
+      }
+    }
+
+    return createOfflineResponse(isApiRequest);
+  }
+}
+
+function createOfflineResponse(isApiRequest) {
+  if (isApiRequest) {
+    return new Response(JSON.stringify({
+      error: true,
+      message: '오프라인 상태입니다. 네트워크 연결을 확인하세요.'
+    }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    });
+  }
+
+  return new Response('오프라인 상태입니다. 네트워크 연결을 확인하세요.', {
+    status: 503,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  });
+}
 
 // 이전 캐시 정리
 self.addEventListener('activate', event => {
@@ -84,4 +99,5 @@ self.addEventListener('activate', event => {
       );
     })
   );
+  self.clients.claim();
 });
