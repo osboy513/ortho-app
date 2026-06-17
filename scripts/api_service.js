@@ -10,6 +10,23 @@ function buildNcbiQuery(params) {
     return searchParams.toString();
 }
 
+function escapePubMedPhrase(value) {
+    return String(value || '').replace(/"/g, '\\"').trim();
+}
+
+function buildJournalQuery(journals = []) {
+    const terms = journals
+        .map(journal => Array.isArray(journal) ? journal : [journal])
+        .map(group => group.map(escapePubMedPhrase).filter(Boolean))
+        .filter(group => group.length > 0)
+        .map(group => {
+            const query = group.map(term => `"${term}"[Journal]`).join(' OR ');
+            return group.length > 1 ? `(${query})` : query;
+        });
+
+    return terms.join(' OR ');
+}
+
 /**
  * PubMed API에 직접 요청하는 함수
  * @param {Object} queryOptions - 검색 옵션 객체
@@ -29,8 +46,10 @@ async function searchPubMed(queryOptions) {
     
     // 저널 필터 처리
     if (journals && journals.length > 0) {
-        const journalQuery = journals.map(journal => `"${journal}"[Journal]`).join(' OR ');
-        searchTerms.push(`(${journalQuery})`);
+        const journalQuery = buildJournalQuery(journals);
+        if (journalQuery) {
+            searchTerms.push(`(${journalQuery})`);
+        }
     }
     
     // 날짜 필터 처리 - 포괄적인 날짜 검색
@@ -283,8 +302,10 @@ async function fetchAllArticlesForExport(queryOptions) {
     // PubMed 쿼리 생성 (searchPubMed와 동일하게)
     let searchTerms = [];
     if (queryOptions.journals && queryOptions.journals.length > 0) {
-        const journalQuery = queryOptions.journals.map(journal => `"${journal}"[Journal]`).join(' OR ');
-        searchTerms.push(`(${journalQuery})`);
+        const journalQuery = buildJournalQuery(queryOptions.journals);
+        if (journalQuery) {
+            searchTerms.push(`(${journalQuery})`);
+        }
     }
     // 날짜 필터
     if (queryOptions.startDate && queryOptions.endDate) {

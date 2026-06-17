@@ -2,7 +2,7 @@ import { searchNCBI, fetchAllArticlesForExport } from './api_service.js';
 import { generateAiSearchQuery, rankAiSearchResults } from './ai_search_service.js';
 import { AI_PROVIDER_PRESETS, clearAiSettings, getSummaryServiceStatus, loadAiSettings, resolveSelectedModel, saveAiSettings } from './summary_service.js';
 import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults, showEmptyState, hideEmptyState } from './ui_manager.js';
-import { journalCategories } from './journal_data.js';
+import { journalCategories } from './journal_data.js?v=17';
 
 // 설정 값
 const CONFIG = {
@@ -77,7 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 기간/저널 선택값 추출
                 const startDate = document.getElementById('start-date')?.value;
                 const endDate = document.getElementById('end-date')?.value;
-                const checkedJournals = Array.from(document.querySelectorAll('.journal-checkbox:checked')).map(cb => cb.getAttribute('data-journal-name'));
+                const checkedJournals = getSelectedJournalSearchTerms(document);
+                const checkedJournalNames = getSelectedJournalNames(document);
                 if (!startDate || !endDate || checkedJournals.length === 0) {
                     alert('기간과 저널을 모두 선택해 주세요.');
                     return;
@@ -97,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         question: keywords,
                         startDate,
                         endDate,
-                        journals: checkedJournals
+                        journals: checkedJournalNames
                     });
                     exportTerm = aiSearchData.pubmedQuery;
                 }
@@ -445,7 +446,7 @@ function initUI() {
                         question: searchInputs.rawKeywords,
                         startDate: searchInputs.startDate,
                         endDate: searchInputs.endDate,
-                        journals: searchInputs.journals
+                        journals: searchInputs.journalNames
                     });
 
                     searchInputs = {
@@ -641,6 +642,50 @@ function setDateRangeMonths(startDateInput, endDateInput, months) {
     endDateInput.value = formatYearMonth(endDate);
 }
 
+function getJournalPubMedTerms(journal) {
+    const terms = Array.isArray(journal.pubmedTerms) && journal.pubmedTerms.length > 0
+        ? journal.pubmedTerms
+        : [journal.abbr || journal.name];
+
+    return Array.from(new Set(
+        terms
+            .map(term => String(term || '').trim())
+            .filter(Boolean)
+    ));
+}
+
+function applyJournalMetadata(input, journal) {
+    if (!input) {
+        return;
+    }
+
+    input.dataset.journalName = journal.abbr || journal.name;
+    input.dataset.journalTerms = JSON.stringify(getJournalPubMedTerms(journal));
+}
+
+function readJournalTerms(checkbox) {
+    try {
+        const parsedTerms = JSON.parse(checkbox.getAttribute('data-journal-terms') || '[]');
+        if (Array.isArray(parsedTerms)) {
+            const terms = parsedTerms.map(term => String(term || '').trim()).filter(Boolean);
+            if (terms.length > 0) {
+                return terms;
+            }
+        }
+    } catch {
+        // 아래 단일 저널명 fallback을 사용합니다.
+    }
+
+    const fallbackTerm = checkbox.getAttribute('data-journal-name');
+    return fallbackTerm ? [fallbackTerm] : [];
+}
+
+function getSelectedJournalSearchTerms(container) {
+    return Array.from(container.querySelectorAll('.journal-checkbox:checked'))
+        .map(readJournalTerms)
+        .filter(terms => terms.length > 0);
+}
+
 function getAiSearchPreference() {
     try {
         return window.localStorage.getItem(AI_SEARCH_MODE_STORAGE_KEY) === 'true';
@@ -786,10 +831,10 @@ function setupJournalFilters(container) {
                     journalItem.innerHTML = `
                         <input type="checkbox" id="${journal.id}" class="journal-checkbox"
                             data-category-id="${category.id}"
-                            data-subcategory-id="${subCategory.id}"
-                            data-journal-name="${journal.abbr || journal.name}">
+                            data-subcategory-id="${subCategory.id}">
                         <label for="${journal.id}">${journal.name}</label>
                     `;
+                    applyJournalMetadata(journalItem.querySelector('.journal-checkbox'), journal);
                     journalsList.appendChild(journalItem);
                 });
 
@@ -848,10 +893,10 @@ function setupJournalFilters(container) {
                 journalItem.className = 'journal-row';
                 journalItem.innerHTML = `
                     <input type="checkbox" id="${journal.id}" class="journal-checkbox"
-                        data-category-id="${category.id}"
-                        data-journal-name="${journal.abbr || journal.name}">
+                        data-category-id="${category.id}">
                     <label for="${journal.id}">${journal.name}</label>
                 `;
+                applyJournalMetadata(journalItem.querySelector('.journal-checkbox'), journal);
                 journalsList.appendChild(journalItem);
             });
 
@@ -1011,9 +1056,8 @@ function validateAndBuildSearchQuery(startDateInput, endDateInput, journalFilter
     }
 
     // 선택된 저널 목록 가져오기 - 서브카테고리 구조 지원
-    const selectedJournals = Array.from(journalFilterContainer.querySelectorAll('.journal-checkbox:checked')).map(
-        checkbox => checkbox.getAttribute('data-journal-name')
-    );
+    const selectedJournals = getSelectedJournalSearchTerms(journalFilterContainer);
+    const selectedJournalNames = getSelectedJournalNames(journalFilterContainer);
 
     if (selectedJournals.length === 0) {
         displayGlobalError('적어도 하나의 저널을 선택해주세요.');
@@ -1029,6 +1073,7 @@ function validateAndBuildSearchQuery(startDateInput, endDateInput, journalFilter
         startDate,
         endDate,
         journals: selectedJournals,
+        journalNames: selectedJournalNames,
         keywords,
         rawKeywords: keywords,
         aiSearchEnabled,

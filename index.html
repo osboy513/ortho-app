@@ -109,6 +109,7 @@
             <footer class="app-footer">
                 <p>&copy; <span id="current-year"></span> Orthopedic Viewer</p>
                 <p>NCBI PubMed & AI</p>
+                <p>Journal data v17 · 89 journals</p>
                 <button id="refresh-app" type="button">앱 새로고침</button>
             </footer>
         </aside>
@@ -258,8 +259,31 @@
     <script type="module" src="scripts/main.js"></script>
     <script>
         // 앱 새로고침 버튼
-        document.getElementById('refresh-app').addEventListener('click', function() {
-            window.location.reload();
+        document.getElementById('refresh-app').addEventListener('click', async function() {
+            const button = this;
+            button.disabled = true;
+            button.textContent = '캐시 갱신 중...';
+
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map(async registration => {
+                        await registration.update().catch(() => undefined);
+                        if (registration.waiting) {
+                            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        }
+                    }));
+                }
+
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+                }
+            } finally {
+                const url = new URL(window.location.href);
+                url.searchParams.set('refresh', String(Date.now()));
+                window.location.replace(url.toString());
+            }
         });
 
         // iOS에서 touchstart 이벤트 추가

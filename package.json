@@ -8,7 +8,8 @@
     "start": "http-server . -p 8080 -o",
     "dev": "npx vercel dev --listen 8080",
     "start:static": "http-server . -p 8080 -o",
-    "build:icons": "node convert-icons.js"
+    "build:icons": "node convert-icons.js",
+    "validate:journals": "node scripts/validate_pubmed_journals.mjs"
   },
   "keywords": [
     "orthopedics",

@@ -47,9 +47,9 @@ const journalCategories = [
         id: "shoulder-elbow",
         name: "Shoulder & Elbow (어깨 및 팔꿈치)",
         journals: [
-            { id: "jses", name: "Journal of Shoulder and Elbow Surgery (JSES)", abbr: "J Shoulder Elbow Surg" },
-            { id: "shoulder-elbow", name: "Shoulder & Elbow", abbr: "Shoulder Elbow" },
-            { id: "int-j-shoulder-surg", name: "International Journal of Shoulder Surgery", abbr: "Int J Shoulder Surg" }
+            { id: "jses", name: "Journal of Shoulder and Elbow Surgery (JSES)", abbr: "J Shoulder Elbow Surg", pubmedTerms: ["J Shoulder Elbow Surg", "Journal of Shoulder and Elbow Surgery"] },
+            { id: "shoulder-elbow", name: "Shoulder & Elbow", abbr: "Shoulder Elbow", pubmedTerms: ["Shoulder Elbow", "Shoulder & Elbow"] },
+            { id: "int-j-shoulder-surg", name: "International Journal of Shoulder Surgery", abbr: "Int J Shoulder Surg", pubmedTerms: ["Int J Shoulder Surg", "International Journal of Shoulder Surgery"] }
         ]
     },
     {
@@ -154,7 +154,7 @@ const journalCategories = [
             { id: "jospt", name: "Journal of Orthopaedic & Sports Physical Therapy", abbr: "J Orthop Sports Phys Ther" },
             { id: "physical-therapy", name: "Physical Therapy", abbr: "Phys Ther" },
             { id: "braz-j-phys-ther", name: "Brazilian Journal of Physical Therapy", abbr: "Braz J Phys Ther" },
-            { id: "clin-biomech", name: "Clinical Biomechanics", abbr: "Clin Biomech (Bristol, Avon)" },
+            { id: "clin-biomech", name: "Clinical Biomechanics", abbr: "Clin Biomech (Bristol, Avon)", pubmedTerms: ["Clinical biomechanics (Bristol, Avon)"] },
             { id: "prosthet-orthot-int", name: "Prosthetics and Orthotics International", abbr: "Prosthet Orthot Int" },
             { id: "orthop-nurs", name: "Orthopaedic Nursing", abbr: "Orthop Nurs" }
         ]
