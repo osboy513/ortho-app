@@ -43,7 +43,7 @@ AI API는 브라우저에서 직접 호출하지 않습니다. 프론트엔드�
 
 ```bash
 OPENAI_API_KEY=sk-your-openai-api-key
-OPENAI_MODEL=gpt-5.4-mini
+OPENAI_MODEL=gpt-5.5
 SUMMARY_CACHE_TTL_SECONDS=2592000
 SUMMARY_RATE_LIMIT=30
 ```

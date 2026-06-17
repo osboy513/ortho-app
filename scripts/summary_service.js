@@ -6,19 +6,27 @@ const AI_PROVIDER_PRESETS = {
         label: 'OpenAI',
         apiKeyPlaceholder: 'sk-...',
         models: [
-            { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
+            { value: 'gpt-5.5', label: 'GPT-5.5' },
+            { value: 'gpt-5.5-pro', label: 'GPT-5.5 Pro' },
             { value: 'gpt-5.4', label: 'GPT-5.4' },
-            { value: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
-            { value: 'gpt-4.1', label: 'GPT-4.1' }
+            { value: 'gpt-5.4-pro', label: 'GPT-5.4 Pro' },
+            { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
+            { value: 'gpt-5.4-nano', label: 'GPT-5.4 nano' },
+            { value: 'gpt-4.1', label: 'GPT-4.1' },
+            { value: 'gpt-4.1-mini', label: 'GPT-4.1 mini' }
         ]
     },
     gemini: {
         label: 'Google Gemini',
         apiKeyPlaceholder: 'AIza...',
         models: [
-            { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+            { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+            { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro Preview' },
+            { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview' },
+            { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
             { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-            { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' }
+            { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+            { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' }
         ]
     }
 };

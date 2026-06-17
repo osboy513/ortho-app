@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
 import OpenAI from "openai";
 
-const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
+const MODEL = process.env.OPENAI_MODEL || "gpt-5.5";
 const PROMPT_VERSION = "ortho-summary-v2";
 const SUPPORTED_PROVIDERS = new Set(["openai", "gemini"]);
 const DEFAULT_PROVIDER = "openai";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const MAX_ABSTRACT_LENGTH = 8000;
 const CACHE_TTL_SECONDS = Number(process.env.SUMMARY_CACHE_TTL_SECONDS || 60 * 60 * 24 * 30);
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
