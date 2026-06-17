@@ -1,10 +1,11 @@
-const CACHE_NAME = 'ortho-paper-v14';
+const CACHE_NAME = 'ortho-paper-v15';
 const urlsToCache = [
   './',
   './index.html',
   './style.css',
   './manifest.json',
   './scripts/ai_search_service.js',
+  './scripts/journal_data.js',
   './scripts/main.js',
   './scripts/api_service.js',
   './scripts/summary_service.js',
