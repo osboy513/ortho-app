@@ -1,4 +1,5 @@
 import { searchNCBI, fetchAllArticlesForExport } from './api_service.js';
+import { generateAiSearchQuery } from './ai_search_service.js';
 import { AI_PROVIDER_PRESETS, clearAiSettings, getSummaryServiceStatus, loadAiSettings, resolveSelectedModel, saveAiSettings } from './summary_service.js';
 import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults, showEmptyState, hideEmptyState } from './ui_manager.js';
 import { journalCategories } from './journal_data.js';
@@ -8,6 +9,7 @@ const CONFIG = {
     articlesPerPage: 15,
     searchDelay: 300 // ms
 };
+const AI_SEARCH_MODE_STORAGE_KEY = 'ortho.aiSearch.enabled';
 
 // 서비스 워커 등록
 if ('serviceWorker' in navigator) {
@@ -81,13 +83,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 // 검색어(키워드)도 포함
-                const keywords = document.getElementById('keywords')?.value || '';
+                const keywords = document.getElementById('keywords')?.value?.trim() || '';
+                const aiSearchEnabled = Boolean(document.getElementById('ai-search-toggle')?.checked);
+                let exportTerm = keywords;
+
+                if (aiSearchEnabled) {
+                    if (!keywords) {
+                        alert('AI 검색 질문을 입력해 주세요.');
+                        return;
+                    }
+
+                    const aiSearchData = await generateAiSearchQuery({
+                        question: keywords,
+                        startDate,
+                        endDate,
+                        journals: checkedJournals
+                    });
+                    exportTerm = aiSearchData.pubmedQuery;
+                }
+
                 // 논문 전체 데이터 fetch
                 const articles = await fetchAllArticlesForExport({
                     startDate,
                     endDate,
                     journals: checkedJournals,
-                    term: keywords
+                    term: exportTerm
                 });
                 if (!articles.length) {
                     alert('해당 조건에 맞는 논문이 없습니다.');
@@ -266,6 +286,7 @@ function initUI() {
     const startDateInput = document.getElementById('start-date');
     const endDateInput = document.getElementById('end-date');
     const keywordsInput = document.getElementById('keywords');
+    const aiSearchToggle = document.getElementById('ai-search-toggle');
     const journalFilterContainer = document.getElementById('journal-filter-container');
     const resultsPanel = document.getElementById('results-panel');
     const articlesListElement = document.getElementById('articles-list');
@@ -294,6 +315,7 @@ function initUI() {
 
     // 날짜 입력 필드 초기화
     initDateFields(startDateInput, endDateInput);
+    initAiSearchMode(aiSearchToggle, keywordsInput);
 
     // 검색 버튼 클릭 이벤트
     searchButton.addEventListener('click', () => performSearch(true));
@@ -321,6 +343,12 @@ function initUI() {
         if (event.key === 'Enter' && syncFormState()) {
             performSearch(true);
         }
+    });
+
+    aiSearchToggle?.addEventListener('change', () => {
+        setAiSearchPreference(aiSearchToggle.checked);
+        applyAiSearchModeState(aiSearchToggle, keywordsInput);
+        syncFormState();
     });
 
     clearJournalsButton?.addEventListener('click', () => {
@@ -357,7 +385,10 @@ function initUI() {
     });
 
     function syncFormState() {
-        const isValid = updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton);
+        const isValid = updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton, {
+            requireKeywords: Boolean(aiSearchToggle?.checked),
+            keywordsInput
+        });
         if (exportButton) {
             exportButton.disabled = !isValid;
         }
@@ -379,15 +410,18 @@ function initUI() {
             return false;
         }
 
+        let searchInputs = null;
+
         // 새 검색인 경우 UI 초기화 및 검색 쿼리 구성
         if (isNewSearch) {
-            const searchInputs = validateAndBuildSearchQuery(startDateInput, endDateInput, journalFilterContainer, keywordsInput);
+            searchInputs = validateAndBuildSearchQuery(startDateInput, endDateInput, journalFilterContainer, keywordsInput, {
+                aiSearchEnabled: Boolean(aiSearchToggle?.checked)
+            });
             if (!searchInputs) {
                 resetSearchButton();
                 return false;
             }
 
-            currentSearchQuery = searchInputs;
             currentRetstart = 0;
             allArticlesLoaded = false;
             hasMore = true;
@@ -396,9 +430,6 @@ function initUI() {
             clearResultsDisplay();
             hideEmptyState();
             hideNoMoreResults();
-            if (searchContextElement) {
-                searchContextElement.textContent = buildSearchContextText(currentSearchQuery);
-            }
             showInitialLoadingIndicator(true);
             setSearchButtonLoading(true);
         } else {
@@ -407,6 +438,38 @@ function initUI() {
         }
 
         try {
+            if (isNewSearch) {
+                if (searchInputs.aiSearchEnabled) {
+                    displayResultsCount('AI 검색식 생성 중...');
+                    const aiSearchData = await generateAiSearchQuery({
+                        question: searchInputs.rawKeywords,
+                        startDate: searchInputs.startDate,
+                        endDate: searchInputs.endDate,
+                        journals: searchInputs.journals
+                    });
+
+                    searchInputs = {
+                        ...searchInputs,
+                        keywords: aiSearchData.pubmedQuery,
+                        aiSearch: {
+                            enabled: true,
+                            question: searchInputs.rawKeywords,
+                            pubmedQuery: aiSearchData.pubmedQuery,
+                            concepts: aiSearchData.concepts || [],
+                            explanation: aiSearchData.explanation || '',
+                            confidence: aiSearchData.confidence || 'medium',
+                            provider: aiSearchData.provider || '',
+                            model: aiSearchData.model || ''
+                        }
+                    };
+                }
+
+                currentSearchQuery = searchInputs;
+                if (searchContextElement) {
+                    searchContextElement.textContent = buildSearchContextText(currentSearchQuery);
+                }
+            }
+
             const { articles, totalResults } = await searchNCBI({
                 ...currentSearchQuery,
                 retstart: currentRetstart,
@@ -557,6 +620,41 @@ function setDateRangeMonths(startDateInput, endDateInput, months) {
     endDateInput.value = formatYearMonth(endDate);
 }
 
+function getAiSearchPreference() {
+    try {
+        return window.localStorage.getItem(AI_SEARCH_MODE_STORAGE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+}
+
+function setAiSearchPreference(enabled) {
+    try {
+        window.localStorage.setItem(AI_SEARCH_MODE_STORAGE_KEY, enabled ? 'true' : 'false');
+    } catch {
+        // localStorage가 막힌 환경에서는 현재 세션의 체크 상태만 사용합니다.
+    }
+}
+
+function initAiSearchMode(toggle, keywordsInput) {
+    if (!toggle) {
+        return;
+    }
+
+    toggle.checked = getAiSearchPreference();
+    applyAiSearchModeState(toggle, keywordsInput);
+}
+
+function applyAiSearchModeState(toggle, keywordsInput) {
+    if (!toggle || !keywordsInput) {
+        return;
+    }
+
+    keywordsInput.placeholder = toggle.checked
+        ? '예: shoulder instability에서 glenoid bony structure가 stability에 미치는 영향'
+        : 'hip arthroplasty';
+}
+
 function getSelectedJournalNames(container) {
     return Array.from(container.querySelectorAll('.journal-checkbox:checked'))
         .map(checkbox => checkbox.closest('.journal-row')?.querySelector('label')?.textContent?.trim() || checkbox.getAttribute('data-journal-name'))
@@ -595,6 +693,13 @@ function clearJournalSelection(container) {
 
 function buildSearchContextText(searchQuery) {
     const journalText = `${searchQuery.journals.length}개 저널`;
+    if (searchQuery.aiSearch?.enabled) {
+        const conceptText = searchQuery.aiSearch.concepts?.length
+            ? ` · 핵심: ${searchQuery.aiSearch.concepts.slice(0, 4).join(', ')}`
+            : '';
+        return `${searchQuery.startDate} ~ ${searchQuery.endDate} · ${journalText} · AI 검색: ${searchQuery.aiSearch.question}${conceptText} · PubMed식: ${searchQuery.aiSearch.pubmedQuery}`;
+    }
+
     const keywordText = searchQuery.keywords ? ` · 키워드: ${searchQuery.keywords}` : '';
     return `${searchQuery.startDate} ~ ${searchQuery.endDate} · ${journalText}${keywordText}`;
 }
@@ -850,22 +955,25 @@ function setupInfiniteScroll(sentinel, container, callback) {
 }
 
 // 검색 버튼 상태 업데이트
-function updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton) {
+function updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton, options = {}) {
     const startDate = startDateInput.value;
     const endDate = endDateInput.value;
     const anyJournalSelected = Array.from(journalFilterContainer.querySelectorAll('.journal-checkbox')).some(cb => cb.checked);
+    const keywordRequired = Boolean(options.requireKeywords);
+    const keywordReady = !keywordRequired || Boolean(options.keywordsInput?.value?.trim());
 
-    const isValid = startDate && endDate && anyJournalSelected;
+    const isValid = startDate && endDate && anyJournalSelected && keywordReady;
     searchButton.disabled = !isValid;
 
     return isValid;
 }
 
 // 검색 쿼리 유효성 검사 및 구성
-function validateAndBuildSearchQuery(startDateInput, endDateInput, journalFilterContainer, keywordsInput) {
+function validateAndBuildSearchQuery(startDateInput, endDateInput, journalFilterContainer, keywordsInput, options = {}) {
     const startDate = startDateInput.value;
     const endDate = endDateInput.value;
-    const keywords = keywordsInput ? keywordsInput.value : '';
+    const keywords = keywordsInput ? keywordsInput.value.trim() : '';
+    const aiSearchEnabled = Boolean(options.aiSearchEnabled);
 
     if (!startDate || !endDate) {
         displayGlobalError('검색 시작일과 종료일을 모두 입력해주세요.');
@@ -891,11 +999,21 @@ function validateAndBuildSearchQuery(startDateInput, endDateInput, journalFilter
         return null;
     }
 
+    if (aiSearchEnabled && !keywords) {
+        displayGlobalError('AI 검색 질문을 입력해주세요.');
+        return null;
+    }
+
     return {
         startDate,
         endDate,
         journals: selectedJournals,
-        keywords: keywords.trim()
+        keywords,
+        rawKeywords: keywords,
+        aiSearchEnabled,
+        aiSearch: {
+            enabled: false
+        }
     };
 }
 

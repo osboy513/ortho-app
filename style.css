@@ -211,6 +211,84 @@ input:focus {
     box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
 }
 
+.search-mode-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 30px;
+}
+
+.switch-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--muted-strong);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1;
+    user-select: none;
+}
+
+.switch-control input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+.switch-track {
+    position: relative;
+    width: 42px;
+    height: 24px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: var(--surface-soft);
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.switch-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(21, 32, 43, 0.2);
+    transition: transform 150ms ease;
+}
+
+.switch-control input:checked + .switch-track {
+    border-color: rgba(15, 118, 110, 0.45);
+    background: var(--accent);
+}
+
+.switch-control input:checked + .switch-track .switch-thumb {
+    transform: translateX(18px);
+}
+
+.switch-control input:focus-visible + .switch-track {
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.switch-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.switch-label svg {
+    width: 15px;
+    height: 15px;
+}
+
+.switch-control input:checked ~ .switch-label {
+    color: var(--accent-strong);
+}
+
 .settings-select {
     appearance: none;
     background:
@@ -1194,7 +1272,9 @@ input:focus {
     }
 
     input[type="month"],
-    input[type="text"] {
+    input[type="text"],
+    input[type="password"],
+    .settings-select {
         min-height: 38px;
     }
 
