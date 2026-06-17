@@ -54,6 +54,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // UI 및 설정 초기화
     initUI();
     initSettings();
+    initAppRefreshButton();
+    initTabs();
+    initTouchFeedback();
 
     // 현재 연도 표시
     document.getElementById('current-year').textContent = new Date().getFullYear();
@@ -152,6 +155,78 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+function initAppRefreshButton() {
+    const refreshButton = document.getElementById('refresh-app');
+    if (!refreshButton) {
+        return;
+    }
+
+    refreshButton.addEventListener('click', async () => {
+        refreshButton.disabled = true;
+        refreshButton.textContent = '캐시 갱신 중...';
+
+        try {
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(async registration => {
+                    await registration.update().catch(() => undefined);
+                    if (registration.waiting) {
+                        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    }
+                }));
+            }
+
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+            }
+        } finally {
+            const url = new URL(window.location.href);
+            url.searchParams.set('refresh', String(Date.now()));
+            window.location.replace(url.toString());
+        }
+    });
+}
+
+function initTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const views = document.querySelectorAll('.view');
+
+    function activateTab(viewId) {
+        views.forEach(view => {
+            view.style.display = 'none';
+        });
+
+        const activeView = document.getElementById(viewId);
+        if (activeView) {
+            activeView.style.display = viewId === 'settings-view' ? 'grid' : 'block';
+        }
+
+        tabButtons.forEach(button => {
+            button.classList.remove('active-tab', 'border-[#0F766E]', 'text-[#0F766E]');
+            button.classList.add('border-transparent', 'text-[#1F2937]');
+        });
+
+        const currentTabButton = document.querySelector(`.tab-btn[data-view="${viewId}"]`);
+        if (currentTabButton) {
+            currentTabButton.classList.add('active-tab', 'border-[#0F766E]', 'text-[#0F766E]');
+            currentTabButton.classList.remove('border-transparent', 'text-[#1F2937]');
+        }
+    }
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            activateTab(button.dataset.view);
+        });
+    });
+
+    activateTab('results-panel');
+}
+
+function initTouchFeedback() {
+    document.addEventListener('touchstart', () => undefined, false);
+}
 
 // 설정 관리 초기화 함수
 function initSettings() {
