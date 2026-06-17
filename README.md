@@ -8,14 +8,15 @@ NCBI PubMed와 AI를 활용한 정형외과 SCI 저널 논문 검색 및 요약 
 - 발행일 기반 필터링
 - 키워드 검색
 - 서버리스 기반 논문 초록 AI 근거 요약 기능
-- 브라우저에 OpenAI API 키를 저장하지 않는 보안 구조
+- 사용자별 OpenAI/Gemini API 키 및 모델 선택 지원
+- 운영자 API 키를 fallback으로 사용할 수 있는 보안 구조
 - PMID/model/prompt version 기반 요약 캐싱
 - 모바일 친화적 반응형 디자인
 - PWA(Progressive Web App) 지원 - 오프라인 기능 및 홈 화면 설치 가능
 
-## v2.0 보안 요약 구조
+## v2.0+ 요약 구조
 
-v2.0부터 OpenAI API는 브라우저에서 직접 호출하지 않습니다. 프론트엔드는 논문 제목, PMID, 초록만 `/api/summarize`로 보내고, 서버리스 함수가 환경변수의 `OPENAI_API_KEY`로 OpenAI API를 호출합니다.
+AI API는 브라우저에서 직접 호출하지 않습니다. 프론트엔드는 논문 제목, PMID, 초록과 사용자가 설정한 AI 제공자/모델 정보를 `/api/summarize`로 보내고, 서버리스 함수가 OpenAI 또는 Gemini API를 호출합니다. 사용자가 API 키를 저장한 경우 해당 키를 우선 사용하고, 없으면 운영자 환경변수의 OpenAI 키를 fallback으로 사용할 수 있습니다.
 
 요약 프롬프트는 초록에 근거한 내용만 반환하도록 제한되어 있으며, 결과는 다음 구조로 렌더링됩니다.
 
@@ -24,9 +25,21 @@ v2.0부터 OpenAI API는 브라우저에서 직접 호출하지 않습니다. �
 - Limitations
 - Confidence
 
+## 사용자 API 키 방식
+
+설정 탭에서 사용자가 직접 AI 제공자와 모델을 선택하고 API 키를 저장할 수 있습니다.
+
+- 지원 제공자: OpenAI, Google Gemini
+- API 키는 해당 브라우저의 `localStorage`에 저장됩니다.
+- 요약 요청 시 API 키가 이 앱의 `/api/summarize` 서버리스 함수로 전송됩니다.
+- 서버는 사용자 API 키를 저장하지 않습니다.
+- API 키를 입력하지 않으면 운영자 환경변수의 OpenAI 키를 fallback으로 사용할 수 있습니다.
+
+정적 서버(`npm run start:static`)에서는 `/api/summarize`가 없으므로 AI 요약은 동작하지 않습니다. 사용자 API 키 방식도 Vercel 개발 서버 또는 배포 환경처럼 서버리스 함수가 실행되는 환경이 필요합니다.
+
 ## Vercel 배포 환경변수
 
-Vercel 프로젝트의 Settings > Environment Variables에 아래 값을 등록하세요.
+운영자 fallback 요약 기능을 제공하려면 Vercel 프로젝트의 Settings > Environment Variables에 아래 값을 등록하세요.
 
 ```bash
 OPENAI_API_KEY=sk-your-openai-api-key

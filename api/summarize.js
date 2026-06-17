@@ -3,6 +3,9 @@ import OpenAI from "openai";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 const PROMPT_VERSION = "ortho-summary-v2";
+const SUPPORTED_PROVIDERS = new Set(["openai", "gemini"]);
+const DEFAULT_PROVIDER = "openai";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const MAX_ABSTRACT_LENGTH = 8000;
 const CACHE_TTL_SECONDS = Number(process.env.SUMMARY_CACHE_TTL_SECONDS || 60 * 60 * 24 * 30);
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -89,10 +92,10 @@ function truncateAbstract(abstract) {
   return `${abstract.slice(0, safeCut).trim()}...`;
 }
 
-function buildCacheKey({ pmid, title, abstract }) {
+function buildProviderCacheKey({ provider, model, pmid, title, abstract }) {
   const source = pmid || `${title}\n${abstract}`;
   const digest = crypto.createHash("sha256").update(source).digest("hex");
-  return `summary:${PROMPT_VERSION}:${MODEL}:${digest}`;
+  return `summary:${PROMPT_VERSION}:${provider}:${model}:${digest}`;
 }
 
 async function readRedisCache(key) {
@@ -194,8 +197,35 @@ function parseSummaryJson(rawText) {
   }
 }
 
-async function generateSummary({ title, abstract, journalName, publicationDate, pmid }) {
-  const input = [
+function normalizeProvider(value) {
+  const provider = normalizeText(value).toLowerCase();
+  return SUPPORTED_PROVIDERS.has(provider) ? provider : DEFAULT_PROVIDER;
+}
+
+function resolveAiConfig(body) {
+  const provider = normalizeProvider(body.aiProvider);
+  const userApiKey = normalizeText(body.aiApiKey);
+  const requestedModel = normalizeText(body.aiModel);
+
+  if (userApiKey) {
+    return {
+      provider,
+      apiKey: userApiKey,
+      model: requestedModel || (provider === "gemini" ? DEFAULT_GEMINI_MODEL : MODEL),
+      source: "user"
+    };
+  }
+
+  return {
+    provider: DEFAULT_PROVIDER,
+    apiKey: process.env.OPENAI_API_KEY || "",
+    model: process.env.OPENAI_MODEL || MODEL,
+    source: "server"
+  };
+}
+
+function buildSummaryInput({ title, abstract, journalName, publicationDate, pmid }) {
+  return [
     `PMID: ${pmid || "N/A"}`,
     `Title: ${title}`,
     `Journal: ${journalName || "N/A"}`,
@@ -203,15 +233,71 @@ async function generateSummary({ title, abstract, journalName, publicationDate, 
     "",
     `Abstract: ${abstract}`,
   ].join("\n");
+}
 
-  const response = await getOpenAIClient().responses.create({
-    model: MODEL,
+async function generateOpenAISummary({ model, apiKey, input }) {
+  const client = apiKey === process.env.OPENAI_API_KEY
+    ? getOpenAIClient()
+    : new OpenAI({ apiKey });
+
+  const response = await client.responses.create({
+    model,
     instructions: SUMMARY_INSTRUCTIONS,
     input,
     max_output_tokens: 900,
   });
 
   return parseSummaryJson(response.output_text);
+}
+
+function readGeminiText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  return parts.map(part => part.text || "").join("\n").trim();
+}
+
+async function generateGeminiSummary({ model, apiKey, input }) {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: SUMMARY_INSTRUCTIONS }]
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: input }]
+        }
+      ],
+      generationConfig: {
+        maxOutputTokens: 900,
+        responseMimeType: "application/json"
+      }
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const detail = data?.error?.message || `${response.status} ${response.statusText}`;
+    throw new Error(`Gemini API error: ${detail}`);
+  }
+
+  return parseSummaryJson(readGeminiText(data));
+}
+
+async function generateSummary({ provider, model, apiKey, title, abstract, journalName, publicationDate, pmid }) {
+  const input = buildSummaryInput({ title, abstract, journalName, publicationDate, pmid });
+
+  if (provider === "gemini") {
+    return generateGeminiSummary({ model, apiKey, input });
+  }
+
+  return generateOpenAISummary({ model, apiKey, input });
 }
 
 export default async function handler(req, res) {
@@ -221,18 +307,14 @@ export default async function handler(req, res) {
       model: MODEL,
       promptVersion: PROMPT_VERSION,
       cache: process.env.UPSTASH_REDIS_REST_URL ? "upstash-redis" : "memory",
+      supportsUserApiKey: true,
+      providers: Array.from(SUPPORTED_PROVIDERS),
     });
   }
 
   if (req.method !== "POST") {
     res.setHeader("Allow", "GET, POST");
     return sendJson(res, 405, { error: "Method not allowed" });
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    return sendJson(res, 500, {
-      error: "OpenAI API key is not configured. Set OPENAI_API_KEY in the deployment environment.",
-    });
   }
 
   const limit = checkRateLimit(req);
@@ -254,6 +336,7 @@ export default async function handler(req, res) {
   const journalName = normalizeText(body.journalName);
   const publicationDate = normalizeText(body.publicationDate);
   const abstract = truncateAbstract(normalizeText(body.abstract));
+  const aiConfig = resolveAiConfig(body);
 
   if (!abstract || abstract === "No abstract information." || abstract === "초록 정보 없음.") {
     return sendJson(res, 400, { error: "초록 내용이 없어 요약할 수 없습니다." });
@@ -263,25 +346,54 @@ export default async function handler(req, res) {
     return sendJson(res, 400, { error: "논문 제목이 없어 요약할 수 없습니다." });
   }
 
+  if (!aiConfig.apiKey) {
+    return sendJson(res, 400, {
+      error: "설정 탭에서 OpenAI 또는 Gemini API 키를 입력해주세요.",
+    });
+  }
+
+  if (!aiConfig.model) {
+    return sendJson(res, 400, {
+      error: "설정 탭에서 사용할 AI 모델을 선택해주세요.",
+    });
+  }
+
   try {
-    const cacheKey = buildCacheKey({ pmid, title, abstract });
+    const cacheKey = buildProviderCacheKey({
+      provider: aiConfig.provider,
+      model: aiConfig.model,
+      pmid,
+      title,
+      abstract
+    });
     const cachedSummary = await getCachedSummary(cacheKey);
     if (cachedSummary) {
       return sendJson(res, 200, {
         summary: cachedSummary,
         cached: true,
-        model: MODEL,
+        provider: aiConfig.provider,
+        model: aiConfig.model,
         promptVersion: PROMPT_VERSION,
       });
     }
 
-    const summary = await generateSummary({ title, abstract, journalName, publicationDate, pmid });
+    const summary = await generateSummary({
+      provider: aiConfig.provider,
+      model: aiConfig.model,
+      apiKey: aiConfig.apiKey,
+      title,
+      abstract,
+      journalName,
+      publicationDate,
+      pmid
+    });
     await setCachedSummary(cacheKey, summary);
 
     return sendJson(res, 200, {
       summary,
       cached: false,
-      model: MODEL,
+      provider: aiConfig.provider,
+      model: aiConfig.model,
       promptVersion: PROMPT_VERSION,
     });
   } catch (error) {

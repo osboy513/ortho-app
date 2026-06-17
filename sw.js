@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ortho-paper-v9';
+const CACHE_NAME = 'ortho-paper-v11';
 const urlsToCache = [
   './',
   './index.html',
@@ -34,29 +34,52 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  event.respondWith(handleFetch(event.request));
+  event.respondWith(handleFetch(event.request, requestUrl));
 });
 
-async function handleFetch(request) {
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
+function shouldUseNetworkFirst(request, requestUrl) {
+  return (
+    request.mode === 'navigate' ||
+    requestUrl.pathname.endsWith('.html') ||
+    requestUrl.pathname.endsWith('.js') ||
+    requestUrl.pathname.endsWith('.css') ||
+    requestUrl.pathname.endsWith('.json')
+  );
+}
+
+async function cacheResponse(request, response) {
+  if (
+    response &&
+    response.status === 200 &&
+    response.type === 'basic'
+  ) {
+    const cache = await caches.open(CACHE_NAME);
+    cache.put(request, response.clone()).catch(() => undefined);
   }
+}
 
+async function handleFetch(request, requestUrl) {
   try {
-    const networkResponse = await fetch(request);
-
-    if (
-      networkResponse &&
-      networkResponse.status === 200 &&
-      networkResponse.type === 'basic'
-    ) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone()).catch(() => undefined);
+    if (shouldUseNetworkFirst(request, requestUrl)) {
+      const networkResponse = await fetch(request);
+      await cacheResponse(request, networkResponse);
+      return networkResponse || createOfflineResponse();
     }
 
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    const networkResponse = await fetch(request);
+    await cacheResponse(request, networkResponse);
     return networkResponse || createOfflineResponse();
   } catch {
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
     if (request.mode === 'navigate') {
       const offlinePage = await caches.match('./index.html');
       if (offlinePage) {

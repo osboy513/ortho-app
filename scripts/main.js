@@ -1,5 +1,5 @@
 import { searchNCBI, fetchAllArticlesForExport } from './api_service.js';
-import { getSummaryServiceStatus } from './summary_service.js';
+import { AI_PROVIDER_PRESETS, clearAiSettings, getSummaryServiceStatus, loadAiSettings, resolveSelectedModel, saveAiSettings } from './summary_service.js';
 import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults, showEmptyState, hideEmptyState } from './ui_manager.js';
 import { journalCategories } from './journal_data.js';
 
@@ -138,10 +138,55 @@ function initSettings() {
     const modelElement = document.getElementById('summary-service-model');
     const cacheElement = document.getElementById('summary-service-cache');
     const refreshButton = document.getElementById('check-summary-service-btn');
+    const providerSelect = document.getElementById('ai-provider');
+    const modelSelect = document.getElementById('ai-model');
+    const customModelField = document.getElementById('custom-model-field');
+    const customModelInput = document.getElementById('ai-custom-model');
+    const apiKeyInput = document.getElementById('ai-api-key');
+    const saveSettingsButton = document.getElementById('save-ai-settings-btn');
+    const clearSettingsButton = document.getElementById('clear-ai-settings-btn');
+    const settingsMessage = document.getElementById('ai-settings-message');
 
-    if (!statusElement || !modelElement || !cacheElement || !refreshButton) {
+    if (!statusElement || !modelElement || !cacheElement || !refreshButton || !providerSelect || !modelSelect || !apiKeyInput) {
         console.warn('설정 UI 요소를 찾을 수 없습니다.');
         return;
+    }
+
+    function populateModelOptions(provider, selectedModel = '') {
+        const preset = AI_PROVIDER_PRESETS[provider] || AI_PROVIDER_PRESETS.openai;
+        modelSelect.replaceChildren();
+
+        preset.models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.value;
+            option.textContent = model.label;
+            modelSelect.appendChild(option);
+        });
+
+        const customOption = document.createElement('option');
+        customOption.value = 'custom';
+        customOption.textContent = '직접 입력';
+        modelSelect.appendChild(customOption);
+
+        const availableValues = preset.models.map(model => model.value).concat('custom');
+        modelSelect.value = availableValues.includes(selectedModel) ? selectedModel : preset.models[0].value;
+        apiKeyInput.placeholder = preset.apiKeyPlaceholder;
+        customModelField?.classList.toggle('hidden', modelSelect.value !== 'custom');
+    }
+
+    function applySettingsToForm(settings = loadAiSettings()) {
+        providerSelect.value = settings.provider;
+        populateModelOptions(settings.provider, settings.model);
+        customModelInput.value = settings.customModel || '';
+        apiKeyInput.value = settings.apiKey || '';
+    }
+
+    function setSettingsMessage(message, variant = 'neutral') {
+        if (!settingsMessage) {
+            return;
+        }
+        settingsMessage.textContent = message;
+        settingsMessage.dataset.variant = variant;
     }
 
     async function updateSummaryServiceStatus(forceRefresh = false) {
@@ -151,8 +196,14 @@ function initSettings() {
 
         const status = await getSummaryServiceStatus(forceRefresh);
 
-        if (status.configured) {
-            statusElement.textContent = '사용 가능: 서버 환경변수 OPENAI_API_KEY가 설정되어 있습니다.';
+        if (status.userConfigured && status.unavailable) {
+            statusElement.textContent = '사용자 API 키는 저장되어 있지만, 서버리스 요약 API에 연결할 수 없습니다.';
+            statusElement.className = 'status-pill warning';
+        } else if (status.userConfigured) {
+            statusElement.textContent = `사용 가능: ${AI_PROVIDER_PRESETS[status.provider]?.label || status.provider} 사용자 API 키를 사용합니다.`;
+            statusElement.className = 'status-pill success';
+        } else if (status.configured) {
+            statusElement.textContent = '사용 가능: 운영자 서버 환경변수 OPENAI_API_KEY가 설정되어 있습니다.';
             statusElement.className = 'status-pill success';
         } else if (status.unavailable) {
             statusElement.textContent = '연결 불가: Vercel/서버리스 환경에서 실행 중인지 확인해주세요.';
@@ -167,6 +218,40 @@ function initSettings() {
         refreshButton.disabled = false;
     }
 
+    providerSelect.addEventListener('change', () => {
+        populateModelOptions(providerSelect.value);
+    });
+
+    modelSelect.addEventListener('change', () => {
+        customModelField?.classList.toggle('hidden', modelSelect.value !== 'custom');
+    });
+
+    saveSettingsButton?.addEventListener('click', async () => {
+        const savedSettings = saveAiSettings({
+            provider: providerSelect.value,
+            model: modelSelect.value,
+            customModel: customModelInput?.value || '',
+            apiKey: apiKeyInput.value
+        });
+        const selectedModel = resolveSelectedModel(savedSettings);
+
+        if (!savedSettings.apiKey || !selectedModel) {
+            setSettingsMessage('회사, 모델, API 키를 모두 입력해야 사용자 키로 요약할 수 있습니다.', 'warning');
+        } else {
+            setSettingsMessage('저장되었습니다. 다음 AI 요약부터 이 브라우저의 사용자 API 키를 사용합니다.', 'success');
+        }
+
+        await updateSummaryServiceStatus(true);
+    });
+
+    clearSettingsButton?.addEventListener('click', async () => {
+        const clearedSettings = clearAiSettings();
+        applySettingsToForm(clearedSettings);
+        setSettingsMessage('사용자 API 설정을 삭제했습니다. 운영자 기본 설정이 있으면 그 설정을 사용합니다.', 'neutral');
+        await updateSummaryServiceStatus(true);
+    });
+
+    applySettingsToForm();
     refreshButton.addEventListener('click', () => updateSummaryServiceStatus(true));
     updateSummaryServiceStatus();
 }

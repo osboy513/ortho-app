@@ -158,6 +158,50 @@
                 <section class="settings-card">
                     <div class="settings-card-header">
                         <div>
+                            <p class="section-kicker">Bring Your Own Key</p>
+                            <h3>사용자 API 설정</h3>
+                        </div>
+                        <i data-lucide="key-round"></i>
+                    </div>
+                    <div class="settings-form">
+                        <div class="field-group">
+                            <label for="ai-provider">회사</label>
+                            <select id="ai-provider" class="settings-select">
+                                <option value="openai">OpenAI</option>
+                                <option value="gemini">Google Gemini</option>
+                            </select>
+                        </div>
+                        <div class="field-group">
+                            <label for="ai-model">모델</label>
+                            <select id="ai-model" class="settings-select"></select>
+                        </div>
+                        <div id="custom-model-field" class="field-group hidden">
+                            <label for="ai-custom-model">커스텀 모델명</label>
+                            <input type="text" id="ai-custom-model" placeholder="예: provider-model-name">
+                        </div>
+                        <div class="field-group">
+                            <label for="ai-api-key">API 키</label>
+                            <input type="password" id="ai-api-key" autocomplete="off" spellcheck="false" placeholder="sk-...">
+                        </div>
+                        <div class="settings-actions">
+                            <button id="save-ai-settings-btn" class="primary-btn" type="button">
+                                <i data-lucide="save"></i>
+                                <span>저장</span>
+                            </button>
+                            <button id="clear-ai-settings-btn" class="secondary-btn" type="button">
+                                <i data-lucide="trash-2"></i>
+                                <span>삭제</span>
+                            </button>
+                        </div>
+                        <p id="ai-settings-message" class="settings-note">
+                            API 키는 이 브라우저에 저장되고, 요약 요청 시 이 앱의 서버리스 API로 전송됩니다. 서버에는 저장하지 않습니다.
+                        </p>
+                    </div>
+                </section>
+
+                <section class="settings-card">
+                    <div class="settings-card-header">
+                        <div>
                             <p class="section-kicker">Service</p>
                             <h3>AI 요약 서비스</h3>
                         </div>
@@ -183,8 +227,8 @@
                 <section class="settings-card compact">
                     <div class="settings-card-header">
                         <div>
-                            <p class="section-kicker">Deploy</p>
-                            <h3>환경 변수</h3>
+                            <p class="section-kicker">Fallback</p>
+                            <h3>운영자 기본 설정</h3>
                         </div>
                         <i data-lucide="server-cog"></i>
                     </div>

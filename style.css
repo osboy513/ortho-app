@@ -183,7 +183,9 @@ a:hover {
 }
 
 input[type="month"],
-input[type="text"] {
+input[type="text"],
+input[type="password"],
+.settings-select {
     width: 100%;
     min-height: 42px;
     border: 1px solid var(--line-strong);
@@ -207,6 +209,15 @@ input::placeholder {
 input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.settings-select {
+    appearance: none;
+    background:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%) right 15px center / 6px 6px no-repeat,
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%) right 10px center / 6px 6px no-repeat,
+        var(--surface);
+    padding-right: 34px;
 }
 
 .date-grid {
@@ -1010,6 +1021,41 @@ input:focus {
     color: var(--accent);
 }
 
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.settings-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 9px;
+}
+
+.settings-note {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-soft);
+    color: var(--muted-strong);
+    font-size: 12px;
+    line-height: 1.55;
+    margin: 0;
+    padding: 10px 11px;
+}
+
+.settings-note[data-variant="success"] {
+    border-color: rgba(4, 120, 87, 0.2);
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.settings-note[data-variant="warning"] {
+    border-color: rgba(180, 83, 9, 0.22);
+    background: var(--amber-soft);
+    color: var(--amber);
+}
+
 .status-pill {
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -1170,7 +1216,8 @@ input:focus {
 @media (max-width: 560px) {
     .date-grid,
     .action-grid,
-    .settings-metrics {
+    .settings-metrics,
+    .settings-actions {
         grid-template-columns: 1fr;
     }
 
