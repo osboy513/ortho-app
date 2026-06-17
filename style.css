@@ -901,6 +901,42 @@ input:focus {
     overflow-wrap: anywhere;
 }
 
+.ai-relevance-section {
+    margin: 0 0 13px;
+    border: 1px solid rgba(15, 118, 110, 0.18);
+    border-radius: 8px;
+    background: var(--accent-soft);
+    padding: 10px 12px;
+}
+
+.ai-relevance-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.ai-relevance-score {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--accent-strong);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.ai-relevance-reason {
+    margin: 6px 0 0;
+    color: var(--ink-soft);
+    font-size: 13px;
+    line-height: 1.48;
+}
+
 .article-section-title {
     margin: 0 0 5px;
     color: var(--ink);

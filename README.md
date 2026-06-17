@@ -8,6 +8,7 @@ NCBI PubMed와 AI를 활용한 정형외과 SCI 저널 논문 검색 및 요약 
 - 발행일 기반 필터링
 - 키워드 검색
 - 자연어 질문을 PubMed 검색식으로 변환하는 AI 검색 모드
+- AI 검색 결과를 title/abstract 기반 관련도순으로 정렬
 - 서버리스 기반 논문 초록 AI 근거 요약 기능
 - 사용자별 OpenAI/Gemini API 키 및 모델 선택 지원
 - 운영자 API 키를 fallback으로 사용할 수 있는 보안 구조
@@ -17,7 +18,7 @@ NCBI PubMed와 AI를 활용한 정형외과 SCI 저널 논문 검색 및 요약 
 
 ## v2.0+ 요약 구조
 
-AI API는 브라우저에서 직접 호출하지 않습니다. 프론트엔드는 논문 제목, PMID, 초록과 사용자가 설정한 AI 제공자/모델 정보를 `/api/summarize`로 보내고, 서버리스 함수가 OpenAI 또는 Gemini API를 호출합니다. AI 검색 모드는 자연어 질문을 `/api/search-query`로 보내 PubMed Boolean 검색식으로 변환합니다. 사용자가 API 키를 저장한 경우 해당 키를 우선 사용하고, 없으면 운영자 환경변수의 OpenAI 키를 fallback으로 사용할 수 있습니다.
+AI API는 브라우저에서 직접 호출하지 않습니다. 프론트엔드는 논문 제목, PMID, 초록과 사용자가 설정한 AI 제공자/모델 정보를 `/api/summarize`로 보내고, 서버리스 함수가 OpenAI 또는 Gemini API를 호출합니다. AI 검색 모드는 자연어 질문을 `/api/search-query`로 보내 PubMed Boolean 검색식으로 변환하고, `/api/search-rank`로 후보 논문을 title/abstract 기반 관련도순으로 정렬합니다. 사용자가 API 키를 저장한 경우 해당 키를 우선 사용하고, 없으면 운영자 환경변수의 OpenAI 키를 fallback으로 사용할 수 있습니다.
 
 요약 프롬프트는 초록에 근거한 내용만 반환하도록 제한되어 있으며, 결과는 다음 구조로 렌더링됩니다.
 
@@ -36,7 +37,7 @@ AI API는 브라우저에서 직접 호출하지 않습니다. 프론트엔드�
 - 서버는 사용자 API 키를 저장하지 않습니다.
 - API 키를 입력하지 않으면 운영자 환경변수의 OpenAI 키를 fallback으로 사용할 수 있습니다.
 
-정적 서버(`npm run start:static`)에서는 `/api/summarize`, `/api/search-query`가 없으므로 AI 요약과 AI 검색은 동작하지 않습니다. 사용자 API 키 방식도 Vercel 개발 서버 또는 배포 환경처럼 서버리스 함수가 실행되는 환경이 필요합니다.
+정적 서버(`npm run start:static`)에서는 `/api/summarize`, `/api/search-query`, `/api/search-rank`가 없으므로 AI 요약과 AI 검색은 동작하지 않습니다. 사용자 API 키 방식도 Vercel 개발 서버 또는 배포 환경처럼 서버리스 함수가 실행되는 환경이 필요합니다.
 
 ## Vercel 배포 환경변수
 
@@ -47,6 +48,8 @@ OPENAI_API_KEY=sk-your-openai-api-key
 OPENAI_MODEL=gpt-5.5
 SUMMARY_CACHE_TTL_SECONDS=2592000
 SUMMARY_RATE_LIMIT=30
+SEARCH_QUERY_RATE_LIMIT=40
+SEARCH_RANK_RATE_LIMIT=60
 ```
 
 서버 간 지속 캐시가 필요하면 Upstash Redis 값을 추가로 등록할 수 있습니다.
@@ -88,7 +91,7 @@ AI 요약과 AI 검색 기능까지 사용하려면 Vercel처럼 `/api/*` 서버
 
 ## 로컬에서 실행하기
 
-의존성을 설치한 뒤 Vercel 개발 서버를 실행하면 `/api/summarize`, `/api/search-query`까지 함께 테스트할 수 있습니다.
+의존성을 설치한 뒤 Vercel 개발 서버를 실행하면 `/api/summarize`, `/api/search-query`, `/api/search-rank`까지 함께 테스트할 수 있습니다.
 
 ```bash
 npm install

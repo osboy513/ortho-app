@@ -1,0 +1,342 @@
+import OpenAI from "openai";
+
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5.5";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
+const RANK_PROMPT_VERSION = "ortho-search-rank-v1";
+const SUPPORTED_PROVIDERS = new Set(["openai", "gemini"]);
+const DEFAULT_PROVIDER = "openai";
+const MAX_QUESTION_LENGTH = 1200;
+const MAX_ARTICLES = 20;
+const MAX_ABSTRACT_LENGTH = 1800;
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = Number(process.env.SEARCH_RANK_RATE_LIMIT || 60);
+
+const rateLimitStore = globalThis.__orthoSearchRankRateLimit || new Map();
+globalThis.__orthoSearchRankRateLimit = rateLimitStore;
+
+let openaiClient;
+
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured.");
+  }
+
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+
+  return openaiClient;
+}
+
+const RANK_INSTRUCTIONS = [
+  "You are an orthopedic research librarian.",
+  "Rank candidate PubMed articles by how directly their title and abstract answer the user's research question.",
+  "Base relevance only on the provided title and abstract. Do not use outside knowledge.",
+  "Score 90-100 for direct evidence on the exact anatomy/pathology/mechanism/outcome in the question.",
+  "Score 60-89 for closely related orthopedic evidence.",
+  "Score 30-59 for partial or indirect relevance.",
+  "Score 0-29 for weak relevance, wrong anatomy, wrong pathology, or no usable abstract.",
+  "Return every provided PMID exactly once.",
+  "Return only valid JSON with this shape:",
+  '{"ranked_articles":[{"pmid":"string","score":0,"reason":"string","confidence":"high|medium|low"}]}',
+].join("\n");
+
+function sendJson(res, statusCode, payload) {
+  res.statusCode = statusCode;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(payload));
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function clampScore(value) {
+  const score = Number(value);
+  if (!Number.isFinite(score)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function getClientId(req) {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return req.socket?.remoteAddress || "unknown";
+}
+
+function checkRateLimit(req) {
+  const clientId = getClientId(req);
+  const now = Date.now();
+  const record = rateLimitStore.get(clientId) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+
+  if (record.resetAt <= now) {
+    record.count = 0;
+    record.resetAt = now + RATE_LIMIT_WINDOW_MS;
+  }
+
+  record.count += 1;
+  rateLimitStore.set(clientId, record);
+
+  return {
+    allowed: record.count <= RATE_LIMIT_MAX_REQUESTS,
+    resetAt: record.resetAt,
+  };
+}
+
+function normalizeProvider(value) {
+  const provider = normalizeText(value).toLowerCase();
+  return SUPPORTED_PROVIDERS.has(provider) ? provider : DEFAULT_PROVIDER;
+}
+
+function resolveAiConfig(body) {
+  const provider = normalizeProvider(body.aiProvider);
+  const userApiKey = normalizeText(body.aiApiKey);
+  const requestedModel = normalizeText(body.aiModel);
+
+  if (userApiKey) {
+    return {
+      provider,
+      apiKey: userApiKey,
+      model: requestedModel || (provider === "gemini" ? DEFAULT_GEMINI_MODEL : OPENAI_MODEL),
+      source: "user",
+    };
+  }
+
+  return {
+    provider: DEFAULT_PROVIDER,
+    apiKey: process.env.OPENAI_API_KEY || "",
+    model: process.env.OPENAI_MODEL || OPENAI_MODEL,
+    source: "server",
+  };
+}
+
+function normalizeArticle(article) {
+  const pmid = normalizeText(article?.pmid);
+  const abstract = normalizeText(article?.abstract);
+
+  return {
+    pmid,
+    title: normalizeText(article?.title).slice(0, 500),
+    journalName: normalizeText(article?.journalName).slice(0, 160),
+    publicationDate: normalizeText(article?.publicationDate).slice(0, 40),
+    abstract: abstract.slice(0, MAX_ABSTRACT_LENGTH),
+  };
+}
+
+function buildRankInput({ question, articles }) {
+  return JSON.stringify({
+    question,
+    articles: articles.map(article => ({
+      pmid: article.pmid,
+      title: article.title,
+      journal: article.journalName,
+      publication_date: article.publicationDate,
+      abstract: article.abstract,
+    })),
+  });
+}
+
+function extractJsonText(rawText) {
+  const text = String(rawText || "").trim();
+  if (text.startsWith("{")) {
+    return text;
+  }
+  return text.match(/\{[\s\S]*\}/)?.[0] || "";
+}
+
+function parseRankJson(rawText, articles) {
+  const allowedPmids = new Set(articles.map(article => article.pmid));
+  const jsonText = extractJsonText(rawText);
+  if (!jsonText) {
+    throw new Error("AI 응답에서 관련도 랭킹을 찾지 못했습니다.");
+  }
+
+  const parsed = JSON.parse(jsonText);
+  const ranked = Array.isArray(parsed.ranked_articles)
+    ? parsed.ranked_articles
+    : Array.isArray(parsed.rankedArticles)
+      ? parsed.rankedArticles
+      : [];
+
+  const byPmid = new Map();
+
+  ranked.forEach(item => {
+    const pmid = normalizeText(item?.pmid);
+    if (!pmid || !allowedPmids.has(pmid) || byPmid.has(pmid)) {
+      return;
+    }
+
+    byPmid.set(pmid, {
+      pmid,
+      score: clampScore(item?.score),
+      reason: normalizeText(item?.reason).slice(0, 280),
+      confidence: ["high", "medium", "low"].includes(item?.confidence) ? item.confidence : "medium",
+    });
+  });
+
+  articles.forEach(article => {
+    if (!byPmid.has(article.pmid)) {
+      byPmid.set(article.pmid, {
+        pmid: article.pmid,
+        score: 0,
+        reason: "AI 랭킹 응답에 포함되지 않았습니다.",
+        confidence: "low",
+      });
+    }
+  });
+
+  return Array.from(byPmid.values()).sort((a, b) => b.score - a.score);
+}
+
+async function generateOpenAIRank({ model, apiKey, input, articles }) {
+  const client = apiKey === process.env.OPENAI_API_KEY
+    ? getOpenAIClient()
+    : new OpenAI({ apiKey });
+
+  const response = await client.responses.create({
+    model,
+    instructions: RANK_INSTRUCTIONS,
+    input,
+    max_output_tokens: 1700,
+  });
+
+  return parseRankJson(response.output_text, articles);
+}
+
+function readGeminiText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  return parts.map(part => part.text || "").join("\n").trim();
+}
+
+async function generateGeminiRank({ model, apiKey, input, articles }) {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: RANK_INSTRUCTIONS }],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: input }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 1700,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const detail = data?.error?.message || `${response.status} ${response.statusText}`;
+    throw new Error(`Gemini API error: ${detail}`);
+  }
+
+  return parseRankJson(readGeminiText(data), articles);
+}
+
+async function generateRank({ provider, model, apiKey, input, articles }) {
+  if (provider === "gemini") {
+    return generateGeminiRank({ model, apiKey, input, articles });
+  }
+
+  return generateOpenAIRank({ model, apiKey, input, articles });
+}
+
+export default async function handler(req, res) {
+  if (req.method === "GET") {
+    return sendJson(res, 200, {
+      configured: Boolean(process.env.OPENAI_API_KEY),
+      model: OPENAI_MODEL,
+      promptVersion: RANK_PROMPT_VERSION,
+      supportsUserApiKey: true,
+      providers: Array.from(SUPPORTED_PROVIDERS),
+    });
+  }
+
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "GET, POST");
+    return sendJson(res, 405, { error: "Method not allowed" });
+  }
+
+  const limit = checkRateLimit(req);
+  if (!limit.allowed) {
+    return sendJson(res, 429, {
+      error: "AI 관련도 정렬 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      resetAt: new Date(limit.resetAt).toISOString(),
+    });
+  }
+
+  let body;
+  try {
+    body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
+  } catch {
+    return sendJson(res, 400, { error: "요청 본문 JSON 형식이 올바르지 않습니다." });
+  }
+
+  const question = normalizeText(body.question).slice(0, MAX_QUESTION_LENGTH);
+  const articles = Array.isArray(body.articles)
+    ? body.articles.map(normalizeArticle).filter(article => article.pmid).slice(0, MAX_ARTICLES)
+    : [];
+  const aiConfig = resolveAiConfig(body);
+
+  if (!question) {
+    return sendJson(res, 400, { error: "AI 관련도 정렬 질문을 입력해주세요." });
+  }
+
+  if (articles.length === 0) {
+    return sendJson(res, 400, { error: "관련도 정렬에 사용할 논문 목록이 없습니다." });
+  }
+
+  if (!aiConfig.apiKey) {
+    return sendJson(res, 400, {
+      error: "설정 탭에서 OpenAI 또는 Gemini API 키를 입력해주세요.",
+    });
+  }
+
+  if (!aiConfig.model) {
+    return sendJson(res, 400, {
+      error: "설정 탭에서 사용할 AI 모델을 선택해주세요.",
+    });
+  }
+
+  try {
+    const input = buildRankInput({ question, articles });
+    const rankedArticles = await generateRank({
+      provider: aiConfig.provider,
+      model: aiConfig.model,
+      apiKey: aiConfig.apiKey,
+      input,
+      articles,
+    });
+
+    return sendJson(res, 200, {
+      rankedArticles,
+      provider: aiConfig.provider,
+      model: aiConfig.model,
+      promptVersion: RANK_PROMPT_VERSION,
+    });
+  } catch (error) {
+    console.error("AI search rank error:", error);
+    return sendJson(res, 500, {
+      error: "AI 관련도 정렬 중 오류가 발생했습니다.",
+      detail: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+}

@@ -1,5 +1,5 @@
 import { searchNCBI, fetchAllArticlesForExport } from './api_service.js';
-import { generateAiSearchQuery } from './ai_search_service.js';
+import { generateAiSearchQuery, rankAiSearchResults } from './ai_search_service.js';
 import { AI_PROVIDER_PRESETS, clearAiSettings, getSummaryServiceStatus, loadAiSettings, resolveSelectedModel, saveAiSettings } from './summary_service.js';
 import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults, showEmptyState, hideEmptyState } from './ui_manager.js';
 import { journalCategories } from './journal_data.js';
@@ -480,18 +480,39 @@ function initUI() {
             const filteredArticles = filterArticlesByDate(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
             console.log(`API 응답: ${articles.length}개, 최종 필터 후: ${filteredArticles.length}개`);
 
+            let articlesToDisplay = filteredArticles;
+            let aiRankingApplied = false;
+            if (currentSearchQuery.aiSearch?.enabled && filteredArticles.length > 0) {
+                try {
+                    if (isNewSearch) {
+                        displayResultsCount('AI 관련도 정렬 중...');
+                    }
+                    articlesToDisplay = await rankAiSearchResults({
+                        question: currentSearchQuery.aiSearch.question,
+                        articles: filteredArticles
+                    });
+                    aiRankingApplied = true;
+                } catch (rankError) {
+                    console.error('AI relevance ranking failed:', rankError);
+                    displayGlobalError(`AI 관련도 정렬 실패: ${rankError.message || '알 수 없는 오류'} PubMed 검색 순서로 표시합니다.`);
+                }
+            }
+
             if (isNewSearch) {
                 totalResultsFound = totalResults;
-                displayResultsCount(`총 ${totalResults}개의 논문을 찾았습니다.`);
-                displayArticles(filteredArticles, articlesListElement, true);
+                const resultMessage = currentSearchQuery.aiSearch?.enabled && aiRankingApplied
+                    ? `총 ${totalResults}개의 후보 논문을 찾았습니다. AI 관련도순으로 정렬했습니다.`
+                    : `총 ${totalResults}개의 논문을 찾았습니다.`;
+                displayResultsCount(resultMessage);
+                displayArticles(articlesToDisplay, articlesListElement, true);
 
                 // 첫 검색에서 결과가 부족하면 추가 로드
-                if (filteredArticles.length < 10 && articles.length === CONFIG.articlesPerPage && !allArticlesLoaded) {
+                if (articlesToDisplay.length < 10 && articles.length === CONFIG.articlesPerPage && !allArticlesLoaded) {
                     console.log("첫 페이지 필터링 후 결과가 부족하여 추가 로드");
                     setTimeout(() => performSearch(false), 100);
                 }
             } else {
-                appendArticles(filteredArticles, articlesListElement);
+                appendArticles(articlesToDisplay, articlesListElement);
             }
 
             // 페이징 업데이트

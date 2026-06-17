@@ -37,6 +37,28 @@ function createMetaPill(iconName, text) {
     return pill;
 }
 
+function createAiRelevanceSection(article) {
+    if (!article.aiRelevance) {
+        return null;
+    }
+
+    const score = Math.max(0, Math.min(100, Math.round(Number(article.aiRelevance.score) || 0)));
+    const wrapper = el('section', 'ai-relevance-section');
+    const header = el('div', 'ai-relevance-header');
+    header.appendChild(el('h4', 'article-section-title', 'AI 관련도'));
+
+    const scoreBadge = el('span', 'ai-relevance-score', `${score}`);
+    scoreBadge.title = `AI 관련도 점수: ${score}/100`;
+    header.appendChild(scoreBadge);
+    wrapper.appendChild(header);
+
+    if (article.aiRelevance.reason) {
+        wrapper.appendChild(el('p', 'ai-relevance-reason', article.aiRelevance.reason));
+    }
+
+    return wrapper;
+}
+
 function appendTextBlocks(container, text, className) {
     const blocks = String(text || '').split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
     blocks.forEach(block => {
@@ -264,12 +286,19 @@ function createArticleCard(article) {
     const meta = el('div', 'article-meta');
     meta.appendChild(createMetaPill('book-open', article.journalName));
     meta.appendChild(createMetaPill('calendar-days', article.publicationDate || 'N/A'));
+    if (article.aiRelevance) {
+        meta.appendChild(createMetaPill('sparkles', `AI ${Math.round(Number(article.aiRelevance.score) || 0)}`));
+    }
     if (article.doi) {
         meta.appendChild(createMetaPill('fingerprint', 'DOI'));
     }
     card.appendChild(meta);
 
     card.appendChild(el('p', 'article-authors', article.authors || 'No author information'));
+    const relevanceSection = createAiRelevanceSection(article);
+    if (relevanceSection) {
+        card.appendChild(relevanceSection);
+    }
     card.appendChild(createAbstractSection(article));
     card.appendChild(createSummarySection(article));
     card.appendChild(createArticleActions(article));
