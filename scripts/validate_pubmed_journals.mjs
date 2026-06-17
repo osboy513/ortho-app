@@ -41,12 +41,25 @@ async function fetchPubMedCount(term) {
     return Number(data.esearchresult?.count || 0);
 }
 
-const journals = journalCategories.flatMap(category =>
-    (category.journals || []).map(journal => ({
-        category: category.name,
-        ...journal
-    }))
-);
+function collectJournals(categories) {
+    return categories.flatMap(category => {
+        const directJournals = (category.journals || []).map(journal => ({
+            category: category.name,
+            ...journal
+        }));
+
+        const nestedJournals = (category.subCategories || []).flatMap(subCategory =>
+            (subCategory.journals || []).map(journal => ({
+                category: `${category.name} > ${subCategory.name}`,
+                ...journal
+            }))
+        );
+
+        return [...directJournals, ...nestedJournals];
+    });
+}
+
+const journals = collectJournals(journalCategories);
 
 const zeroCountJournals = [];
 let checkedCount = 0;

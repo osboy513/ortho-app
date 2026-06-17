@@ -2,7 +2,7 @@ import { searchNCBI, fetchAllArticlesForExport } from './api_service.js';
 import { generateAiSearchQuery, rankAiSearchResults } from './ai_search_service.js';
 import { AI_PROVIDER_PRESETS, clearAiSettings, getSummaryServiceStatus, loadAiSettings, resolveSelectedModel, saveAiSettings } from './summary_service.js';
 import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults, showEmptyState, hideEmptyState } from './ui_manager.js';
-import { journalCategories } from './journal_data.js?v=17';
+import { journalCategories } from './journal_data.js?v=18';
 
 // 설정 값
 const CONFIG = {
@@ -79,8 +79,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const endDate = document.getElementById('end-date')?.value;
                 const checkedJournals = getSelectedJournalSearchTerms(document);
                 const checkedJournalNames = getSelectedJournalNames(document);
-                if (!startDate || !endDate || checkedJournals.length === 0) {
-                    alert('기간과 저널을 모두 선택해 주세요.');
+                if (!endDate || checkedJournals.length === 0) {
+                    alert('종료일과 저널을 선택해 주세요.');
                     return;
                 }
                 // 검색어(키워드)도 포함
@@ -133,7 +133,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `Ortho_PubMed_${startDate}_${endDate}.csv`;
+                const fileRange = startDate ? `${startDate}_${endDate}` : `until_${endDate}`;
+                a.download = `Ortho_PubMed_${fileRange}.csv`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -142,10 +143,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('논문 내보내기 중 오류 발생: ' + (e.message || e));
             } finally {
                 spinner.classList.add('hidden');
+                const aiExportEnabled = Boolean(document.getElementById('ai-search-toggle')?.checked);
+                const exportKeywordReady = !aiExportEnabled || Boolean(document.getElementById('keywords')?.value?.trim());
                 const canExport = Boolean(
-                    document.getElementById('start-date')?.value &&
                     document.getElementById('end-date')?.value &&
-                    document.querySelectorAll('.journal-checkbox:checked').length
+                    document.querySelectorAll('.journal-checkbox:checked').length &&
+                    exportKeywordReady
                 );
                 exportBtn.disabled = !canExport;
             }
@@ -313,6 +316,7 @@ function initUI() {
     let isLoadingMore = false;
     let allArticlesLoaded = false;
     let hasMore = true;
+    let deferredNoAbstractArticles = [];
 
     // 날짜 입력 필드 초기화
     initDateFields(startDateInput, endDateInput);
@@ -426,6 +430,7 @@ function initUI() {
             currentRetstart = 0;
             allArticlesLoaded = false;
             hasMore = true;
+            deferredNoAbstractArticles = [];
 
             clearGlobalError();
             clearResultsDisplay();
@@ -481,16 +486,21 @@ function initUI() {
             const filteredArticles = filterArticlesByDate(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
             console.log(`API 응답: ${articles.length}개, 최종 필터 후: ${filteredArticles.length}개`);
 
-            let articlesToDisplay = filteredArticles;
+            const { availableArticles, unavailableArticles } = splitArticlesByAbstract(filteredArticles);
+            if (unavailableArticles.length > 0) {
+                deferredNoAbstractArticles.push(...unavailableArticles);
+            }
+
+            let articlesToDisplay = availableArticles;
             let aiRankingApplied = false;
-            if (currentSearchQuery.aiSearch?.enabled && filteredArticles.length > 0) {
+            if (currentSearchQuery.aiSearch?.enabled && availableArticles.length > 0) {
                 try {
                     if (isNewSearch) {
                         displayResultsCount('AI 관련도 정렬 중...');
                     }
                     articlesToDisplay = await rankAiSearchResults({
                         question: currentSearchQuery.aiSearch.question,
-                        articles: filteredArticles
+                        articles: availableArticles
                     });
                     aiRankingApplied = true;
                 } catch (rankError) {
@@ -506,12 +516,6 @@ function initUI() {
                     : `총 ${totalResults}개의 논문을 찾았습니다.`;
                 displayResultsCount(resultMessage);
                 displayArticles(articlesToDisplay, articlesListElement, true);
-
-                // 첫 검색에서 결과가 부족하면 추가 로드
-                if (articlesToDisplay.length < 10 && articles.length === CONFIG.articlesPerPage && !allArticlesLoaded) {
-                    console.log("첫 페이지 필터링 후 결과가 부족하여 추가 로드");
-                    setTimeout(() => performSearch(false), 100);
-                }
             } else {
                 appendArticles(articlesToDisplay, articlesListElement);
             }
@@ -525,6 +529,11 @@ function initUI() {
                 hasMore = false;
                 console.log("모든 논문 로드 완료");
 
+                if (deferredNoAbstractArticles.length > 0) {
+                    appendArticles(deferredNoAbstractArticles, articlesListElement);
+                    deferredNoAbstractArticles = [];
+                }
+
                 // 필터링 후 전체 표시된 논문 수가 0이 아닌 경우에만 메시지 표시
                 const totalDisplayed = articlesListElement.querySelectorAll('.article-card').length;
                 if (totalDisplayed > 0) {
@@ -532,13 +541,6 @@ function initUI() {
                 } else {
                     hideNoMoreResults();
                     showEmptyState('검색 결과 없음', '조건에 맞는 PubMed 논문을 찾지 못했습니다.');
-                }
-            } else {
-                // 필터링 후 표시된 결과가 적으면 자동으로 추가 로드
-                const currentDisplayed = articlesListElement.querySelectorAll('.article-card').length;
-                if (currentDisplayed < 10 && !isLoadingMore) {
-                    console.log(`표시된 논문이 ${currentDisplayed}개뿐이므로 추가 로드`);
-                    setTimeout(() => performSearch(false), 100);
                 }
             }
         } catch (error) {
@@ -758,16 +760,19 @@ function clearJournalSelection(container) {
 }
 
 function buildSearchContextText(searchQuery) {
+    const dateText = searchQuery.startDate
+        ? `${searchQuery.startDate} ~ ${searchQuery.endDate}`
+        : `전체 기간 ~ ${searchQuery.endDate}`;
     const journalText = `${searchQuery.journals.length}개 저널`;
     if (searchQuery.aiSearch?.enabled) {
         const conceptText = searchQuery.aiSearch.concepts?.length
             ? ` · 핵심: ${searchQuery.aiSearch.concepts.slice(0, 4).join(', ')}`
             : '';
-        return `${searchQuery.startDate} ~ ${searchQuery.endDate} · ${journalText} · AI 검색: ${searchQuery.aiSearch.question}${conceptText} · PubMed식: ${searchQuery.aiSearch.pubmedQuery}`;
+        return `${dateText} · ${journalText} · AI 검색: ${searchQuery.aiSearch.question}${conceptText} · PubMed식: ${searchQuery.aiSearch.pubmedQuery}`;
     }
 
     const keywordText = searchQuery.keywords ? ` · 키워드: ${searchQuery.keywords}` : '';
-    return `${searchQuery.startDate} ~ ${searchQuery.endDate} · ${journalText}${keywordText}`;
+    return `${dateText} · ${journalText}${keywordText}`;
 }
 
 // 저널 필터 UI 설정
@@ -1022,13 +1027,12 @@ function setupInfiniteScroll(sentinel, container, callback) {
 
 // 검색 버튼 상태 업데이트
 function updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton, options = {}) {
-    const startDate = startDateInput.value;
     const endDate = endDateInput.value;
     const anyJournalSelected = Array.from(journalFilterContainer.querySelectorAll('.journal-checkbox')).some(cb => cb.checked);
     const keywordRequired = Boolean(options.requireKeywords);
     const keywordReady = !keywordRequired || Boolean(options.keywordsInput?.value?.trim());
 
-    const isValid = startDate && endDate && anyJournalSelected && keywordReady;
+    const isValid = endDate && anyJournalSelected && keywordReady;
     searchButton.disabled = !isValid;
 
     return isValid;
@@ -1041,16 +1045,16 @@ function validateAndBuildSearchQuery(startDateInput, endDateInput, journalFilter
     const keywords = keywordsInput ? keywordsInput.value.trim() : '';
     const aiSearchEnabled = Boolean(options.aiSearchEnabled);
 
-    if (!startDate || !endDate) {
-        displayGlobalError('검색 시작일과 종료일을 모두 입력해주세요.');
+    if (!endDate) {
+        displayGlobalError('검색 종료일을 입력해주세요.');
         return null;
     }
 
     // 날짜 유효성 검사 추가
-    const startDateObj = new Date(startDate + '-01');
+    const startDateObj = startDate ? new Date(startDate + '-01') : null;
     const endDateObj = new Date(endDate + '-01');
 
-    if (startDateObj > endDateObj) {
+    if (startDateObj && startDateObj > endDateObj) {
         displayGlobalError('시작일이 종료일보다 늦을 수 없습니다.');
         return null;
     }
@@ -1114,14 +1118,14 @@ window.addEventListener('beforeunload', () => {
 
 // 타임존 문제 해결을 위한 UTC 기반 날짜 필터링 함수
 function filterArticlesByDate(articles, startDateStr, endDateStr) {
-    if (!startDateStr || !endDateStr) return articles;
+    if (!endDateStr) return articles;
 
     try {
         // YYYY-MM 형식을 파싱
-        const [startYear, startMonth] = startDateStr.split('-').map(Number);
         const [endYear, endMonth] = endDateStr.split('-').map(Number);
+        const [startYear, startMonth] = startDateStr ? startDateStr.split('-').map(Number) : [0, 0];
 
-        console.log(`날짜 필터링: ${startYear}-${startMonth} ~ ${endYear}-${endMonth}`);
+        console.log(`날짜 필터링: ${startDateStr || '전체 기간'} ~ ${endYear}-${endMonth}`);
 
         return articles.filter(article => {
             if (!article.publicationDate) return false;
@@ -1135,7 +1139,7 @@ function filterArticlesByDate(articles, startDateStr, endDateStr) {
 
             // 연도와 월을 비교
             const pubYearMonth = pubYear * 100 + pubMonth;
-            const startYearMonth = startYear * 100 + startMonth;
+            const startYearMonth = startDateStr ? startYear * 100 + startMonth : 0;
             const endYearMonth = endYear * 100 + endMonth;
 
             const isInRange = pubYearMonth >= startYearMonth && pubYearMonth <= endYearMonth;
@@ -1150,4 +1154,27 @@ function filterArticlesByDate(articles, startDateStr, endDateStr) {
         console.error("날짜 필터링 중 오류 발생:", e);
         return articles;
     }
+}
+
+function hasAvailableAbstract(article) {
+    const abstract = String(article?.abstract || '').trim();
+    return Boolean(
+        abstract &&
+        abstract !== 'No abstract information.' &&
+        abstract !== '초록 정보 없음.'
+    );
+}
+
+function splitArticlesByAbstract(articles) {
+    return articles.reduce((groups, article) => {
+        if (hasAvailableAbstract(article)) {
+            groups.availableArticles.push(article);
+        } else {
+            groups.unavailableArticles.push(article);
+        }
+        return groups;
+    }, {
+        availableArticles: [],
+        unavailableArticles: []
+    });
 }

@@ -27,6 +27,79 @@ function buildJournalQuery(journals = []) {
     return terms.join(' OR ');
 }
 
+function parseYearMonth(value) {
+    if (!value) {
+        return null;
+    }
+
+    const [year, month] = String(value).split('-').map(Number);
+    if (!year || !month || Number.isNaN(year) || Number.isNaN(month)) {
+        return null;
+    }
+
+    return { year, month };
+}
+
+function formatStartOfMonth(yearMonth) {
+    return `${yearMonth.year}/${String(yearMonth.month).padStart(2, '0')}/01`;
+}
+
+function formatEndOfMonth(yearMonth) {
+    const lastDayOfMonth = new Date(yearMonth.year, yearMonth.month, 0).getDate();
+    return `${yearMonth.year}/${String(yearMonth.month).padStart(2, '0')}/${String(lastDayOfMonth).padStart(2, '0')}`;
+}
+
+function buildDateQuery(startDate, endDate) {
+    const endYearMonth = parseYearMonth(endDate);
+    if (!endYearMonth) {
+        return '';
+    }
+
+    const startYearMonth = parseYearMonth(startDate);
+    const startDateFormatted = startYearMonth ? formatStartOfMonth(startYearMonth) : '0001/01/01';
+    const endDateFormatted = formatEndOfMonth(endYearMonth);
+
+    console.log('PubMed 날짜 쿼리 범위:', startDateFormatted, '-', endDateFormatted);
+
+    return [
+        `"${startDateFormatted}"[Date - Entrez] : "${endDateFormatted}"[Date - Entrez]`,
+        `"${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication]`,
+        `"${startDateFormatted}"[Date - Create] : "${endDateFormatted}"[Date - Create]`
+    ].join(' OR ');
+}
+
+function getPublicationYearMonth(publicationDate) {
+    if (!publicationDate) {
+        return null;
+    }
+
+    const dateParts = String(publicationDate).split('-');
+    const pubYear = parseInt(dateParts[0], 10);
+    const pubMonth = dateParts[1] ? parseInt(dateParts[1], 10) : 1;
+
+    if (!pubYear || Number.isNaN(pubYear)) {
+        return null;
+    }
+
+    return pubYear * 100 + (pubMonth || 1);
+}
+
+function filterArticlesByQueryDateRange(articles, startDate, endDate) {
+    const endYearMonth = parseYearMonth(endDate);
+    if (!endYearMonth) {
+        return articles;
+    }
+
+    const startYearMonth = parseYearMonth(startDate);
+    const startValue = startYearMonth ? startYearMonth.year * 100 + startYearMonth.month : 0;
+    const endValue = endYearMonth.year * 100 + endYearMonth.month;
+
+    return articles.filter(article => {
+        const publicationValue = getPublicationYearMonth(article.publicationDate);
+        return publicationValue !== null && publicationValue >= startValue && publicationValue <= endValue;
+    });
+}
+
 /**
  * PubMed API에 직접 요청하는 함수
  * @param {Object} queryOptions - 검색 옵션 객체
@@ -52,30 +125,13 @@ async function searchPubMed(queryOptions) {
         }
     }
     
-    // 날짜 필터 처리 - 포괄적인 날짜 검색
-    if (startDate && endDate) {
+    // 날짜 필터 처리 - 시작일이 비어 있으면 과거 전체부터 종료일까지 검색
+    if (endDate) {
         try {
-            // YYYY-MM 형식을 YYYY/MM/01 및 YYYY/MM/마지막날로 변환
-            const [startYear, startMonth] = startDate.split('-').map(Number);
-            const [endYear, endMonth] = endDate.split('-').map(Number);
-            
-            // 시작일: 해당 월의 첫날
-            const startDateFormatted = `${startYear}/${String(startMonth).padStart(2, '0')}/01`;
-            
-            // 종료일: 해당 월의 마지막 날
-            const lastDayOfMonth = new Date(endYear, endMonth, 0).getDate();
-            const endDateFormatted = `${endYear}/${String(endMonth).padStart(2, '0')}/${String(lastDayOfMonth).padStart(2, '0')}`;
-            
-            console.log('PubMed 날짜 쿼리 범위:', startDateFormatted, '-', endDateFormatted);
-            
-            // 여러 날짜 필드를 OR로 연결하여 포괄적 검색
-            const dateQuery = [
-                `"${startDateFormatted}"[Date - Entrez] : "${endDateFormatted}"[Date - Entrez]`,
-                `"${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication]`,
-                `"${startDateFormatted}"[Date - Create] : "${endDateFormatted}"[Date - Create]`
-            ].join(' OR ');
-            
-            searchTerms.push(`(${dateQuery})`);
+            const dateQuery = buildDateQuery(startDate, endDate);
+            if (dateQuery) {
+                searchTerms.push(`(${dateQuery})`);
+            }
         } catch (error) {
             console.error('Date processing error:', error);
             // 날짜 처리 실패 시 쿼리에서 제외
@@ -308,19 +364,12 @@ async function fetchAllArticlesForExport(queryOptions) {
         }
     }
     // 날짜 필터
-    if (queryOptions.startDate && queryOptions.endDate) {
+    if (queryOptions.endDate) {
         try {
-            const [startYear, startMonth] = queryOptions.startDate.split('-').map(Number);
-            const [endYear, endMonth] = queryOptions.endDate.split('-').map(Number);
-            const startDateFormatted = `${startYear}/${String(startMonth).padStart(2, '0')}/01`;
-            const lastDayOfMonth = new Date(endYear, endMonth, 0).getDate();
-            const endDateFormatted = `${endYear}/${String(endMonth).padStart(2, '0')}/${String(lastDayOfMonth).padStart(2, '0')}`;
-            const dateQuery = [
-                `"${startDateFormatted}"[Date - Entrez] : "${endDateFormatted}"[Date - Entrez]`,
-                `"${startDateFormatted}"[Date - Publication] : "${endDateFormatted}"[Date - Publication]`,
-                `"${startDateFormatted}"[Date - Create] : "${endDateFormatted}"[Date - Create]`
-            ].join(' OR ');
-            searchTerms.push(`(${dateQuery})`);
+            const dateQuery = buildDateQuery(queryOptions.startDate, queryOptions.endDate);
+            if (dateQuery) {
+                searchTerms.push(`(${dateQuery})`);
+            }
         } catch (error) {
             // 날짜 처리 실패 시 무시
         }
@@ -368,21 +417,7 @@ async function fetchAllArticlesForExport(queryOptions) {
         articles.push(...batchArticles);
     }
 
-    // post-filter: publicationDate가 기간 내에 있는 논문만 반환
-    if (queryOptions.startDate && queryOptions.endDate) {
-        const start = queryOptions.startDate;
-        const end = queryOptions.endDate;
-        // YYYY-MM 또는 YYYY-MM-DD 형식 지원
-        return articles.filter(a => {
-            if (!a.publicationDate) return false;
-            // YYYY-MM-DD, YYYY-MM, YYYY 모두 지원
-            const pub = a.publicationDate.length === 4 ? a.publicationDate + '-01-01'
-                : a.publicationDate.length === 7 ? a.publicationDate + '-01'
-                : a.publicationDate;
-            return pub >= start + '-01' && pub <= end + '-31';
-        });
-    }
-    return articles;
+    return filterArticlesByQueryDateRange(articles, queryOptions.startDate, queryOptions.endDate);
 }
 
 export { searchNCBI, fetchAllArticlesForExport };
