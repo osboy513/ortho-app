@@ -1,11 +1,17 @@
 import crypto from "node:crypto";
-import OpenAI from "openai";
+import {
+  SUPPORTED_PROVIDERS,
+  checkRateLimit,
+  createOpenAIClient,
+  extractJsonText,
+  normalizeText,
+  readGeminiText,
+  resolveAiConfig,
+  sendJson,
+} from "../server/ai_common.js";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.5";
 const PROMPT_VERSION = "ortho-summary-v2";
-const SUPPORTED_PROVIDERS = new Set(["openai", "gemini"]);
-const DEFAULT_PROVIDER = "openai";
-const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const MAX_ABSTRACT_LENGTH = 8000;
 const CACHE_TTL_SECONDS = Number(process.env.SUMMARY_CACHE_TTL_SECONDS || 60 * 60 * 24 * 30);
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -16,22 +22,6 @@ const rateLimitStore = globalThis.__orthoSummaryRateLimit || new Map();
 globalThis.__orthoSummaryCache = memoryCache;
 globalThis.__orthoSummaryRateLimit = rateLimitStore;
 
-let openaiClient;
-
-function getOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
-
-  if (!openaiClient) {
-    openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-  }
-
-  return openaiClient;
-}
-
 const SUMMARY_INSTRUCTIONS = [
   "You are an orthopedic research assistant.",
   "Summarize only from the provided PubMed title and abstract.",
@@ -41,46 +31,6 @@ const SUMMARY_INSTRUCTIONS = [
   "Return only valid JSON with this shape:",
   '{"clinical_relevance":"string","key_points":["string","string","string"],"limitations":"string","confidence":"high|medium|low"}',
 ].join("\n");
-
-function sendJson(res, statusCode, payload) {
-  res.statusCode = statusCode;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.end(JSON.stringify(payload));
-}
-
-function getClientId(req) {
-  const forwardedFor = req.headers["x-forwarded-for"];
-  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
-    return forwardedFor.split(",")[0].trim();
-  }
-  return req.socket?.remoteAddress || "unknown";
-}
-
-function checkRateLimit(req) {
-  const clientId = getClientId(req);
-  const now = Date.now();
-  const record = rateLimitStore.get(clientId) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
-
-  if (record.resetAt <= now) {
-    record.count = 0;
-    record.resetAt = now + RATE_LIMIT_WINDOW_MS;
-  }
-
-  record.count += 1;
-  rateLimitStore.set(clientId, record);
-
-  return {
-    allowed: record.count <= RATE_LIMIT_MAX_REQUESTS,
-    resetAt: record.resetAt,
-  };
-}
-
-function normalizeText(value) {
-  return String(value || "")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 function truncateAbstract(abstract) {
   if (abstract.length <= MAX_ABSTRACT_LENGTH) {
@@ -166,7 +116,7 @@ async function setCachedSummary(key, value) {
 
 function parseSummaryJson(rawText) {
   const text = String(rawText || "").trim();
-  const jsonText = text.startsWith("{") ? text : text.match(/\{[\s\S]*\}/)?.[0];
+  const jsonText = extractJsonText(rawText);
 
   if (!jsonText) {
     return {
@@ -197,33 +147,6 @@ function parseSummaryJson(rawText) {
   }
 }
 
-function normalizeProvider(value) {
-  const provider = normalizeText(value).toLowerCase();
-  return SUPPORTED_PROVIDERS.has(provider) ? provider : DEFAULT_PROVIDER;
-}
-
-function resolveAiConfig(body) {
-  const provider = normalizeProvider(body.aiProvider);
-  const userApiKey = normalizeText(body.aiApiKey);
-  const requestedModel = normalizeText(body.aiModel);
-
-  if (userApiKey) {
-    return {
-      provider,
-      apiKey: userApiKey,
-      model: requestedModel || (provider === "gemini" ? DEFAULT_GEMINI_MODEL : MODEL),
-      source: "user"
-    };
-  }
-
-  return {
-    provider: DEFAULT_PROVIDER,
-    apiKey: process.env.OPENAI_API_KEY || "",
-    model: process.env.OPENAI_MODEL || MODEL,
-    source: "server"
-  };
-}
-
 function buildSummaryInput({ title, abstract, journalName, publicationDate, pmid }) {
   return [
     `PMID: ${pmid || "N/A"}`,
@@ -236,9 +159,7 @@ function buildSummaryInput({ title, abstract, journalName, publicationDate, pmid
 }
 
 async function generateOpenAISummary({ model, apiKey, input }) {
-  const client = apiKey === process.env.OPENAI_API_KEY
-    ? getOpenAIClient()
-    : new OpenAI({ apiKey });
+  const client = createOpenAIClient(apiKey);
 
   const response = await client.responses.create({
     model,
@@ -248,11 +169,6 @@ async function generateOpenAISummary({ model, apiKey, input }) {
   });
 
   return parseSummaryJson(response.output_text);
-}
-
-function readGeminiText(data) {
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-  return parts.map(part => part.text || "").join("\n").trim();
 }
 
 async function generateGeminiSummary({ model, apiKey, input }) {
@@ -317,7 +233,10 @@ export default async function handler(req, res) {
     return sendJson(res, 405, { error: "Method not allowed" });
   }
 
-  const limit = checkRateLimit(req);
+  const limit = checkRateLimit(req, rateLimitStore, {
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    maxRequests: RATE_LIMIT_MAX_REQUESTS,
+  });
   if (!limit.allowed) {
     return sendJson(res, 429, {
       error: "요약 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
@@ -336,7 +255,7 @@ export default async function handler(req, res) {
   const journalName = normalizeText(body.journalName);
   const publicationDate = normalizeText(body.publicationDate);
   const abstract = truncateAbstract(normalizeText(body.abstract));
-  const aiConfig = resolveAiConfig(body);
+  const aiConfig = resolveAiConfig(body, { openAiModel: MODEL });
 
   if (!abstract || abstract === "No abstract information." || abstract === "초록 정보 없음.") {
     return sendJson(res, 400, { error: "초록 내용이 없어 요약할 수 없습니다." });
