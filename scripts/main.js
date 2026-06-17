@@ -1,6 +1,6 @@
 import { searchNCBI, fetchAllArticlesForExport } from './api_service.js';
 import { getSummaryServiceStatus } from './summary_service.js';
-import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults } from './ui_manager.js';
+import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults, showEmptyState, hideEmptyState } from './ui_manager.js';
 import { journalCategories } from './journal_data.js';
 
 // 설정 값
@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'Export_List.csv';
+                a.download = `Ortho_PubMed_${startDate}_${endDate}.csv`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -121,7 +121,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('논문 내보내기 중 오류 발생: ' + (e.message || e));
             } finally {
                 spinner.classList.add('hidden');
-                exportBtn.disabled = false;
+                const canExport = Boolean(
+                    document.getElementById('start-date')?.value &&
+                    document.getElementById('end-date')?.value &&
+                    document.querySelectorAll('.journal-checkbox:checked').length
+                );
+                exportBtn.disabled = !canExport;
             }
         });
     }
@@ -141,20 +146,20 @@ function initSettings() {
 
     async function updateSummaryServiceStatus(forceRefresh = false) {
         statusElement.textContent = '요약 서비스 상태 확인 중...';
-        statusElement.className = 'rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700';
+        statusElement.className = 'status-pill neutral';
         refreshButton.disabled = true;
 
         const status = await getSummaryServiceStatus(forceRefresh);
 
         if (status.configured) {
             statusElement.textContent = '사용 가능: 서버 환경변수 OPENAI_API_KEY가 설정되어 있습니다.';
-            statusElement.className = 'rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 border border-emerald-200';
+            statusElement.className = 'status-pill success';
         } else if (status.unavailable) {
             statusElement.textContent = '연결 불가: Vercel/서버리스 환경에서 실행 중인지 확인해주세요.';
-            statusElement.className = 'rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700 border border-amber-200';
+            statusElement.className = 'status-pill warning';
         } else {
             statusElement.textContent = '설정 필요: 배포 환경에 OPENAI_API_KEY를 등록해주세요.';
-            statusElement.className = 'rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 border border-red-200';
+            statusElement.className = 'status-pill danger';
         }
 
         modelElement.textContent = status.model || 'N/A';
@@ -181,6 +186,12 @@ function initUI() {
     const articlesListElement = document.getElementById('articles-list');
     const scrollSentinel = document.getElementById('scroll-sentinel');
     const rightPanelScroller = document.getElementById('right-panel-scroller');
+    const exportButton = document.getElementById('export-list-btn');
+    const selectedJournalsCountElement = document.getElementById('selected-journals-count');
+    const selectedJournalsSummaryElement = document.getElementById('selected-journals-summary');
+    const clearJournalsButton = document.getElementById('clear-journals-btn');
+    const searchContextElement = document.getElementById('search-context');
+    const rangePresetButtons = document.querySelectorAll('.range-preset');
 
     // 필수 요소 존재 확인
     if (!searchButton || !startDateInput || !endDateInput || !journalFilterContainer || !rightPanelScroller) {
@@ -204,6 +215,33 @@ function initUI() {
 
     // 저널 필터 UI 설정
     setupJournalFilters(journalFilterContainer);
+    syncFormState();
+
+    rangePresetButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const months = Number(button.dataset.months || 12);
+            setDateRangeMonths(startDateInput, endDateInput, months);
+            rangePresetButtons.forEach(preset => preset.classList.toggle('active', preset === button));
+            syncFormState();
+        });
+    });
+
+    [startDateInput, endDateInput].forEach(input => {
+        input.addEventListener('input', () => {
+            rangePresetButtons.forEach(button => button.classList.remove('active'));
+        });
+    });
+
+    keywordsInput?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && syncFormState()) {
+            performSearch(true);
+        }
+    });
+
+    clearJournalsButton?.addEventListener('click', () => {
+        clearJournalSelection(journalFilterContainer);
+        syncFormState();
+    });
 
     // IntersectionObserver를 사용한 무한 스크롤 설정
     if (scrollSentinel && rightPanelScroller) {
@@ -221,7 +259,7 @@ function initUI() {
     // 폼 입력 유효성 실시간 검사 및 검색 버튼 상태 업데이트
     const formElements = [startDateInput, endDateInput, keywordsInput].filter(Boolean);
     formElements.forEach(el => {
-        el.addEventListener('input', () => updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton));
+        el.addEventListener('input', syncFormState);
     });
 
     // 저널 체크박스 변경 시 검색 버튼 상태 업데이트
@@ -229,9 +267,23 @@ function initUI() {
     journalFilterContainer.addEventListener('change', (e) => {
         // 체크박스 변경인 경우에만 상태 업데이트
         if (e.target.type === 'checkbox') {
-            updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton);
+            syncFormState();
         }
     });
+
+    function syncFormState() {
+        const isValid = updateSearchButtonState(startDateInput, endDateInput, journalFilterContainer, searchButton);
+        if (exportButton) {
+            exportButton.disabled = !isValid;
+        }
+        updateSelectedJournalSummary(
+            journalFilterContainer,
+            selectedJournalsCountElement,
+            selectedJournalsSummaryElement,
+            clearJournalsButton
+        );
+        return isValid;
+    }
 
     // 검색 수행 함수
     async function performSearch(isNewSearch) {
@@ -257,6 +309,11 @@ function initUI() {
 
             clearGlobalError();
             clearResultsDisplay();
+            hideEmptyState();
+            hideNoMoreResults();
+            if (searchContextElement) {
+                searchContextElement.textContent = buildSearchContextText(currentSearchQuery);
+            }
             showInitialLoadingIndicator(true);
             setSearchButtonLoading(true);
         } else {
@@ -304,6 +361,7 @@ function initUI() {
                     showNoMoreResults();
                 } else {
                     hideNoMoreResults();
+                    showEmptyState('검색 결과 없음', '조건에 맞는 PubMed 논문을 찾지 못했습니다.');
                 }
             } else {
                 // 필터링 후 표시된 결과가 적으면 자동으로 추가 로드
@@ -331,6 +389,7 @@ function initUI() {
             if (isNewSearch) {
                 displayResultsCount('');
                 allArticlesLoaded = true;
+                showEmptyState('검색 실패', userErrorMessage);
             }
         } finally {
             isLoadingMore = false;
@@ -399,67 +458,126 @@ function initDateFields(startDateInput, endDateInput) {
     }
 }
 
+function formatYearMonth(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+}
+
+function setDateRangeMonths(startDateInput, endDateInput, months) {
+    const endDate = new Date();
+    const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - Math.max(months - 1, 0), 1);
+
+    startDateInput.value = formatYearMonth(startDate);
+    endDateInput.value = formatYearMonth(endDate);
+}
+
+function getSelectedJournalNames(container) {
+    return Array.from(container.querySelectorAll('.journal-checkbox:checked'))
+        .map(checkbox => checkbox.closest('.journal-row')?.querySelector('label')?.textContent?.trim() || checkbox.getAttribute('data-journal-name'))
+        .filter(Boolean);
+}
+
+function updateSelectedJournalSummary(container, countElement, summaryElement, clearButton) {
+    const selectedJournalNames = getSelectedJournalNames(container);
+    const count = selectedJournalNames.length;
+
+    if (countElement) {
+        countElement.textContent = String(count);
+    }
+
+    if (summaryElement) {
+        if (count === 0) {
+            summaryElement.textContent = '선택된 저널 없음';
+        } else if (count <= 2) {
+            summaryElement.textContent = selectedJournalNames.join(', ');
+        } else {
+            summaryElement.textContent = `${selectedJournalNames.slice(0, 2).join(', ')} 외 ${count - 2}개`;
+        }
+    }
+
+    if (clearButton) {
+        clearButton.disabled = count === 0;
+    }
+}
+
+function clearJournalSelection(container) {
+    container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = false;
+        checkbox.indeterminate = false;
+    });
+}
+
+function buildSearchContextText(searchQuery) {
+    const journalText = `${searchQuery.journals.length}개 저널`;
+    const keywordText = searchQuery.keywords ? ` · 키워드: ${searchQuery.keywords}` : '';
+    return `${searchQuery.startDate} ~ ${searchQuery.endDate} · ${journalText}${keywordText}`;
+}
+
 // 저널 필터 UI 설정
 function setupJournalFilters(container) {
+    const expandFirstCategory = !window.matchMedia('(max-width: 920px)').matches;
+
     // 저널 카테고리 생성
-    journalCategories.forEach(category => {
+    journalCategories.forEach((category, categoryIndex) => {
+        const isInitiallyExpanded = expandFirstCategory && categoryIndex === 0;
         const categoryElement = document.createElement('div');
-        categoryElement.className = 'mb-4 border border-[#CBD5D1] rounded-md';
+        categoryElement.className = 'journal-category';
 
         // 카테고리 토글 버튼 생성
         const categoryToggleButton = document.createElement('button');
-        categoryToggleButton.className = 'category-toggle w-full flex justify-between items-center text-left p-2 rounded-t-md bg-[#CFE3DC] hover:bg-[#CBD5D1] transition';
+        categoryToggleButton.className = `category-toggle${isInitiallyExpanded ? ' expanded' : ''}`;
         categoryToggleButton.innerHTML = `
             <div class="flex items-center">
-                <input type="checkbox" id="select-all-${category.id}" class="select-all-category h-4 w-4 form-checkbox transition rounded border-[#1F2937] border-2 text-[#1F2937] mr-2" data-category-id="${category.id}">
+                <input type="checkbox" id="select-all-${category.id}" class="select-all-category" data-category-id="${category.id}">
                 <label for="select-all-${category.id}" class="flex-grow font-bold">${category.name}</label>
             </div>
-            <i data-lucide="chevron-down" class="lucide-icon w-5 h-5"></i>
+            <i data-lucide="${isInitiallyExpanded ? 'chevron-up' : 'chevron-down'}" class="lucide-icon"></i>
         `;
 
         categoryElement.appendChild(categoryToggleButton);
 
         // 카테고리 콘텐츠 컨테이너 생성
         const categoryContent = document.createElement('div');
-        categoryContent.className = 'category-content hidden p-2';
+        categoryContent.className = isInitiallyExpanded ? 'category-content' : 'category-content hidden';
         categoryElement.appendChild(categoryContent);
 
         // 서브 카테고리가 있는 경우
         if (category.subCategories) {
             const subCategoriesContainer = document.createElement('div');
-            subCategoriesContainer.className = 'subcategories-container space-y-2';
+            subCategoriesContainer.className = 'subcategories-container';
 
             // 각 서브 카테고리 생성
             category.subCategories.forEach(subCategory => {
                 const subCategoryElement = document.createElement('div');
-                subCategoryElement.className = 'subcategory mb-2';
+                subCategoryElement.className = 'subcategory';
 
                 // 서브 카테고리 토글 버튼
                 const subCategoryToggleButton = document.createElement('button');
-                subCategoryToggleButton.className = 'subcategory-toggle w-full flex justify-between items-center text-left p-1.5 bg-[#CFE3DC]/60 hover:bg-[#CBD5D1]/70 rounded-md';
+                subCategoryToggleButton.className = 'subcategory-toggle';
                 subCategoryToggleButton.innerHTML = `
                     <div class="flex items-center">
-                        <input type="checkbox" id="select-all-${subCategory.id}" class="select-all-subcategory h-4 w-4 form-checkbox transition rounded border-[#1F2937] border-2 text-[#1F2937] mr-2" data-subcategory-id="${subCategory.id}">
+                        <input type="checkbox" id="select-all-${subCategory.id}" class="select-all-subcategory" data-subcategory-id="${subCategory.id}">
                         <label for="select-all-${subCategory.id}" class="flex-grow font-semibold text-sm">${subCategory.name}</label>
                     </div>
-                    <i data-lucide="chevron-down" class="lucide-icon w-4 h-4"></i>
+                    <i data-lucide="chevron-down" class="lucide-icon"></i>
                 `;
 
                 subCategoryElement.appendChild(subCategoryToggleButton);
 
                 // 서브 카테고리의 저널 목록
                 const journalsList = document.createElement('div');
-                journalsList.className = 'subcategory-journals-list hidden pl-3 mt-1 space-y-1';
+                journalsList.className = 'subcategory-journals-list hidden';
 
                 subCategory.journals.forEach(journal => {
                     const journalItem = document.createElement('div');
-                    journalItem.className = 'flex items-center mt-1';
+                    journalItem.className = 'journal-row';
                     journalItem.innerHTML = `
-                        <input type="checkbox" id="${journal.id}" class="journal-checkbox h-3.5 w-3.5 form-checkbox transition rounded border-[#1F2937] border-2 text-[#1F2937] mr-2"
+                        <input type="checkbox" id="${journal.id}" class="journal-checkbox"
                             data-category-id="${category.id}"
                             data-subcategory-id="${subCategory.id}"
                             data-journal-name="${journal.abbr || journal.name}">
-                        <label for="${journal.id}" class="text-xs text-[#1F2937]">${journal.name}</label>
+                        <label for="${journal.id}">${journal.name}</label>
                     `;
                     journalsList.appendChild(journalItem);
                 });
@@ -512,16 +630,16 @@ function setupJournalFilters(container) {
         } else {
             // 서브 카테고리가 없는 경우 - 일반 저널 목록
             const journalsList = document.createElement('div');
-            journalsList.className = 'journals-list pl-2 space-y-1';
+            journalsList.className = 'journals-list';
 
             category.journals.forEach(journal => {
                 const journalItem = document.createElement('div');
-                journalItem.className = 'flex items-center mt-1';
+                journalItem.className = 'journal-row';
                 journalItem.innerHTML = `
-                    <input type="checkbox" id="${journal.id}" class="journal-checkbox h-4 w-4 form-checkbox transition rounded border-[#1F2937] border-2 text-[#1F2937] mr-2"
+                    <input type="checkbox" id="${journal.id}" class="journal-checkbox"
                         data-category-id="${category.id}"
                         data-journal-name="${journal.abbr || journal.name}">
-                    <label for="${journal.id}" class="text-sm">${journal.name}</label>
+                    <label for="${journal.id}">${journal.name}</label>
                 `;
                 journalsList.appendChild(journalItem);
             });

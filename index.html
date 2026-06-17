@@ -23,132 +23,177 @@
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-[#F7F8FA] text-[#1F2937] antialiased">
-    <div class="flex flex-col md:flex-row min-h-screen">
-        <!-- Left Panel (Filters) -->
-        <aside class="w-full md:w-[380px] lg:w-[420px] p-4 md:p-5 bg-[#E7F3EF] shadow-lg flex flex-col md:h-screen">
-            <header class="mb-5 text-center md:text-left">
-                <h1 class="text-2xl lg:text-3xl font-bold text-[#1F2937]">정형외과 논문 뷰어</h1>
-                <p class="text-sm text-[#1F2937]/80 mt-1">NCBI PubMed & AI 요약</p>
+<body class="app-body antialiased">
+    <div class="app-shell">
+        <aside class="filter-panel">
+            <header class="app-brand">
+                <img src="icons/icon-192x192.png" alt="" class="app-brand-mark">
+                <div>
+                    <p class="app-kicker">Orthopedic Research</p>
+                    <h1>정형외과 논문 뷰어</h1>
+                </div>
             </header>
 
-            <div id="search-form-container" class="space-y-3 mb-4">
-                <div>
-                    <label for="keywords" class="block text-xs font-medium text-[#1F2937] mb-1">키워드 (선택)</label>
-                    <input type="text" id="keywords" name="keywords" placeholder="예: hip arthroplasty" class="mt-1 block w-full rounded-md border-[#CBD5D1] shadow-sm focus:border-[#0F766E] focus:ring-[#0F766E] sm:text-sm p-2 bg-white text-[#1F2937] placeholder:text-gray-400">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label for="start-date" class="block text-xs font-medium text-[#1F2937] mb-1">등록 연월 (시작)</label>
-                        <input type="month" id="start-date" name="start-date" class="mt-1 block w-full rounded-md border-[#CBD5D1] shadow-sm focus:border-[#0F766E] focus:ring-[#0F766E] sm:text-sm p-2 bg-white text-[#1F2937]">
-                    </div>
-                    <div>
-                        <label for="end-date" class="block text-xs font-medium text-[#1F2937] mb-1">등록 연월 (종료)</label>
-                        <input type="month" id="end-date" name="end-date" class="mt-1 block w-full rounded-md border-[#CBD5D1] shadow-sm focus:border-[#0F766E] focus:ring-[#0F766E] sm:text-sm p-2 bg-white text-[#1F2937]">
+            <section id="search-form-container" class="search-panel" aria-label="논문 검색">
+                <div class="field-group">
+                    <label for="keywords">키워드</label>
+                    <div class="input-shell">
+                        <i data-lucide="search" class="input-icon"></i>
+                        <input type="text" id="keywords" name="keywords" placeholder="hip arthroplasty">
                     </div>
                 </div>
-                 <button id="search-button" class="w-full bg-[#1F2937] hover:bg-[#0F766E] text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center text-sm">
-                    <i data-lucide="search" class="mr-2 h-4 w-4 search-icon"></i>
-                    <span class="search-text">검색</span>
-                    <div class="spinner hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                </button>
-                <button id="export-list-btn" class="w-full bg-[#0F766E] hover:bg-[#1F2937] text-white font-semibold py-2.5 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center text-sm mt-2">
-                    <i data-lucide="download" class="mr-2 h-4 w-4"></i>
-                    <span>Export List</span>
-                    <div class="export-spinner hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
-                </button>
-            </div>
 
-            <label class="block text-sm font-semibold text-[#1F2937] mb-2">저널 선택 (하나 이상)</label>
-            <div id="journal-filter-container" class="flex-grow overflow-y-auto space-y-2 pr-1 journal-list-scrollbar">
-                <!-- Journal categories will be populated by JS or listed here -->
-            </div>
-                <div class="mt-auto pt-3 text-center text-xs text-[#1F2937]/70">
-                <p>&copy; <span id="current-year"></span> Orthopedic Viewer. Powered by NCBI & OpenAI.</p>
-                <p class="mt-1">독립형 모바일 앱 버전 v2.0</p>
-                <button id="refresh-app" class="mt-2 text-xs text-[#1F2937]/80 underline">앱 새로고침</button>
-            </div>
+                <div class="date-grid">
+                    <div class="field-group">
+                        <label for="start-date">시작</label>
+                        <input type="month" id="start-date" name="start-date">
+                    </div>
+                    <div class="field-group">
+                        <label for="end-date">종료</label>
+                        <input type="month" id="end-date" name="end-date">
+                    </div>
+                </div>
+
+                <div class="range-presets" aria-label="기간 프리셋">
+                    <button type="button" class="range-preset" data-months="1">1개월</button>
+                    <button type="button" class="range-preset" data-months="6">6개월</button>
+                    <button type="button" class="range-preset active" data-months="12">1년</button>
+                    <button type="button" class="range-preset" data-months="36">3년</button>
+                </div>
+
+                <div class="action-grid">
+                    <button id="search-button" class="primary-btn" disabled>
+                        <i data-lucide="search" class="search-icon"></i>
+                        <span class="search-text">검색</span>
+                        <span class="spinner hidden"></span>
+                    </button>
+                    <button id="export-list-btn" class="secondary-btn" disabled>
+                        <i data-lucide="download"></i>
+                        <span>CSV</span>
+                        <span class="export-spinner hidden"></span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="journal-panel" aria-label="저널 선택">
+                <div class="journal-heading">
+                    <div>
+                        <p class="section-kicker">Journals</p>
+                        <h2>저널 선택</h2>
+                    </div>
+                    <span id="selected-journals-count" class="selection-badge">0</span>
+                </div>
+                <div id="selected-journals-summary" class="selected-summary">선택된 저널 없음</div>
+                <button id="clear-journals-btn" type="button" class="ghost-btn" disabled>
+                    <i data-lucide="x"></i>
+                    <span>선택 해제</span>
+                </button>
+                <div id="journal-filter-container" class="journal-list-scrollbar">
+                    <!-- Journal categories are populated by JS. -->
+                </div>
+            </section>
+
+            <footer class="app-footer">
+                <p>&copy; <span id="current-year"></span> Orthopedic Viewer</p>
+                <p>NCBI PubMed & OpenAI</p>
+                <button id="refresh-app" type="button">앱 새로고침</button>
+            </footer>
         </aside>
 
-        <!-- Right Panel (Results and Settings) -->
-        <div id="right-panel-scroller" class="w-full flex-1 p-4 md:p-6 md:h-screen md:overflow-y-auto">
-            <!-- Tab Navigation -->
-            <div class="flex mb-6 border-b border-[#CBD5D1]">
-                <button class="tab-btn py-3 px-6 text-sm font-semibold text-center text-[#1F2937] border-b-2 border-transparent hover:border-[#0F766E] focus:outline-none transition-colors duration-200 active-tab" data-view="results-panel">
-                    <i data-lucide="search" class="inline w-4 h-4 mr-2"></i>검색 결과
-                </button>
-                <button class="tab-btn py-3 px-6 text-sm font-semibold text-center text-[#1F2937] border-b-2 border-transparent hover:border-[#0F766E] focus:outline-none transition-colors duration-200" data-view="settings-view">
-                    <i data-lucide="settings" class="inline w-4 h-4 mr-2"></i>설정
-                </button>
+        <div id="right-panel-scroller" class="workspace-panel">
+            <div class="workspace-header">
+                <div>
+                    <p class="section-kicker">Literature Scan</p>
+                    <h2>검색 결과</h2>
+                </div>
+                <nav class="tab-switcher" aria-label="보기 전환">
+                    <button class="tab-btn active-tab" data-view="results-panel" type="button">
+                        <i data-lucide="list-filter"></i>
+                        <span>결과</span>
+                    </button>
+                    <button class="tab-btn" data-view="settings-view" type="button">
+                        <i data-lucide="settings"></i>
+                        <span>설정</span>
+                    </button>
+                </nav>
             </div>
 
-            <!-- Results Panel (Default View) -->
             <main id="results-panel" class="view">
-                <div id="error-message-container" class="mb-4"></div>
-                <div id="results-count" class="mb-4 text-sm font-medium text-[#1F2937]"></div>
+                <div id="error-message-container"></div>
+                <div class="results-toolbar">
+                    <div>
+                        <div id="results-count" class="results-count"></div>
+                        <div id="search-context" class="search-context"></div>
+                    </div>
+                </div>
 
-                <div id="initial-loading-indicator" class="hidden text-center py-8">
-                    <div role="status" class="flex justify-center items-center flex-col">
-                        <svg aria-hidden="true" class="w-10 h-10 text-gray-200 animate-spin fill-[#1F2937]" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C0 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/>
-                            <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0492C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill"/>
-                        </svg>
-                        <p class="mt-2 text-sm text-[#1F2937]">논문 검색 중...</p>
+                <section id="empty-state" class="empty-state">
+                    <div class="empty-state-icon">
+                        <i data-lucide="scan-search"></i>
+                    </div>
+                    <h3>검색 대기</h3>
+                    <p>기간과 저널을 선택하면 PubMed 결과가 여기에 표시됩니다.</p>
+                </section>
+
+                <div id="initial-loading-indicator" class="loading-state hidden">
+                    <div role="status">
+                        <span class="loading-ring"></span>
+                        <p>논문 검색 중...</p>
                     </div>
                 </div>
-                <div id="articles-list" class="space-y-5">
-                    <!-- Article cards will be appended here -->
+                <div id="articles-list" class="articles-list">
+                    <!-- Article cards are appended here. -->
                 </div>
-                <div id="scroll-sentinel" style="height: 1px; width: 100%;"></div>
-                <div id="infinite-scroll-loader" class="hidden text-center py-4 text-sm text-[#1F2937]">
-                    <div class="flex justify-center items-center space-x-2">
-                        <div class="w-4 h-4 border-2 border-[#1F2937] border-t-transparent rounded-full animate-spin"></div>
-                        <span>추가 논문 로딩 중...</span>
-                    </div>
+                <div id="scroll-sentinel"></div>
+                <div id="infinite-scroll-loader" class="inline-loader hidden">
+                    <span class="mini-spinner"></span>
+                    <span>추가 논문 로딩 중...</span>
                 </div>
-                <div id="no-more-results" class="hidden text-center py-4 text-sm text-[#1F2937]/80">
+                <div id="no-more-results" class="end-of-results hidden">
                     더 이상 로드할 논문이 없습니다.
                 </div>
             </main>
 
-            <!-- Settings Panel -->
-            <div id="settings-view" class="view" style="display:none;">
-                <h2 class="text-xl lg:text-2xl font-bold text-[#1F2937] mb-6 flex items-center">
-                    <i data-lucide="settings" class="w-6 h-6 mr-3"></i>설정
-                </h2>
-                <div class="settings-form-container max-w-xl">
-                    <div class="bg-white rounded-lg shadow-md p-6 border border-[#CBD5D1]">
-                        <div class="mb-4">
-                            <h3 class="text-sm font-semibold text-[#1F2937] mb-2 flex items-center">
-                                <i data-lucide="shield-check" class="inline w-4 h-4 mr-1"></i>AI 요약 서비스
-                            </h3>
-                            <p id="summary-service-status" class="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700">상태 확인 전</p>
+            <div id="settings-view" class="view settings-view" style="display:none;">
+                <section class="settings-card">
+                    <div class="settings-card-header">
+                        <div>
+                            <p class="section-kicker">Service</p>
+                            <h3>AI 요약 서비스</h3>
                         </div>
-                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-4">
-                            <div class="rounded-md bg-[#F7F8FA] border border-[#CBD5D1] p-3">
-                                <dt class="text-xs text-[#1F2937]/70">Model</dt>
-                                <dd id="summary-service-model" class="font-semibold text-[#1F2937]">N/A</dd>
-                            </div>
-                            <div class="rounded-md bg-[#F7F8FA] border border-[#CBD5D1] p-3">
-                                <dt class="text-xs text-[#1F2937]/70">Cache</dt>
-                                <dd id="summary-service-cache" class="font-semibold text-[#1F2937]">N/A</dd>
-                            </div>
-                        </dl>
-                        <button id="check-summary-service-btn"
-                            class="w-full bg-[#1F2937] hover:bg-[#0F766E] disabled:opacity-60 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out text-sm flex items-center justify-center">
-                            <i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>상태 다시 확인
-                        </button>
-
-                        <div class="mt-6 pt-4 border-t border-[#CBD5D1]">
-                            <h3 class="text-sm font-semibold text-[#1F2937] mb-2">안내사항</h3>
-                            <ul class="text-xs text-[#1F2937]/80 space-y-1">
-                                <li>• OpenAI API 키는 브라우저에 저장하지 않습니다</li>
-                                <li>• Vercel Environment Variables에 OPENAI_API_KEY를 등록하세요</li>
-                                <li>• 선택 사항: OPENAI_MODEL, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN</li>
-                            </ul>
-                        </div>
+                        <i data-lucide="shield-check"></i>
                     </div>
-                </div>
+                    <p id="summary-service-status" class="status-pill neutral">상태 확인 전</p>
+                    <dl class="settings-metrics">
+                        <div>
+                            <dt>Model</dt>
+                            <dd id="summary-service-model">N/A</dd>
+                        </div>
+                        <div>
+                            <dt>Cache</dt>
+                            <dd id="summary-service-cache">N/A</dd>
+                        </div>
+                    </dl>
+                    <button id="check-summary-service-btn" class="primary-btn full-width" type="button">
+                        <i data-lucide="refresh-cw"></i>
+                        <span>상태 다시 확인</span>
+                    </button>
+                </section>
+
+                <section class="settings-card compact">
+                    <div class="settings-card-header">
+                        <div>
+                            <p class="section-kicker">Deploy</p>
+                            <h3>환경 변수</h3>
+                        </div>
+                        <i data-lucide="server-cog"></i>
+                    </div>
+                    <ul class="settings-list">
+                        <li>OPENAI_API_KEY</li>
+                        <li>OPENAI_MODEL</li>
+                        <li>UPSTASH_REDIS_REST_URL / TOKEN</li>
+                    </ul>
+                </section>
             </div>
         </div>
     </div>
@@ -178,7 +223,7 @@
                 // 선택된 뷰 표시
                 const activeView = document.getElementById(viewId);
                 if (activeView) {
-                    activeView.style.display = 'block';
+                    activeView.style.display = viewId === 'settings-view' ? 'grid' : 'block';
                 }
 
                 // 탭 버튼 스타일 업데이트

@@ -5,6 +5,7 @@ const errorMessageContainer = document.getElementById('error-message-container')
 const initialLoadingIndicatorElement = document.getElementById('initial-loading-indicator');
 const infiniteScrollLoaderElement = document.getElementById('infinite-scroll-loader');
 const noMoreResultsElement = document.getElementById('no-more-results');
+const emptyStateElement = document.getElementById('empty-state');
 
 function el(tagName, className = '', text = '') {
     const element = document.createElement(tagName);
@@ -24,6 +25,18 @@ function appendField(container, label, value) {
     container.appendChild(paragraph);
 }
 
+function icon(name) {
+    const element = el('i');
+    element.setAttribute('data-lucide', name);
+    return element;
+}
+
+function createMetaPill(iconName, text) {
+    const pill = el('span', 'meta-pill');
+    pill.append(icon(iconName), document.createTextNode(text || 'N/A'));
+    return pill;
+}
+
 function appendTextBlocks(container, text, className) {
     const blocks = String(text || '').split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
     blocks.forEach(block => {
@@ -40,21 +53,21 @@ function isAbstractAvailable(article) {
 }
 
 function createAbstractSection(article) {
-    const wrapper = el('div', 'mb-2.5');
-    wrapper.appendChild(el('h4', 'text-xs font-semibold text-[#1F2937] mb-0.5', '초록:'));
+    const wrapper = el('section', 'abstract-section');
+    wrapper.appendChild(el('h4', 'article-section-title', '초록'));
 
     const textContainer = el('div', 'abstract-text-container');
     if (!isAbstractAvailable(article)) {
-        textContainer.appendChild(el('p', 'text-sm text-gray-500 italic', '초록 정보 없음.'));
+        textContainer.appendChild(el('p', 'abstract-muted', '초록 정보 없음.'));
         wrapper.appendChild(textContainer);
         return wrapper;
     }
 
-    const abstractContent = el('div', 'abstract-content text-sm text-[#1F2937]');
-    appendTextBlocks(abstractContent, article.abstract, 'mb-2 last:mb-0');
+    const abstractContent = el('div', 'abstract-content');
+    appendTextBlocks(abstractContent, article.abstract, '');
     textContainer.appendChild(abstractContent);
 
-    const expandButton = el('button', 'text-xs text-[#1F2937] hover:underline mt-1.5 expand-abstract-button', '자세히 보기');
+    const expandButton = el('button', 'expand-abstract-button', '자세히 보기');
     expandButton.type = 'button';
     expandButton.addEventListener('click', () => {
         abstractContent.classList.toggle('expanded');
@@ -87,19 +100,19 @@ function renderSummary(container, data) {
     container.dataset.error = 'false';
     container.dataset.loaded = 'true';
 
-    const meta = el('div', 'mb-3 flex flex-wrap items-center gap-2');
-    meta.appendChild(el('span', 'inline-flex rounded-full bg-[#E7F3EF] px-2 py-0.5 text-[11px] font-semibold text-[#0F766E]', data.cached ? 'Cached' : 'New'));
-    meta.appendChild(el('span', 'text-[11px] text-gray-500', `Model: ${data.model || 'N/A'}`));
+    const meta = el('div', 'summary-chip-row');
+    meta.appendChild(el('span', 'summary-chip', data.cached ? 'Cached' : 'New'));
+    meta.appendChild(el('span', 'summary-chip', `Model: ${data.model || 'N/A'}`));
     container.appendChild(meta);
 
     if (summary.clinical_relevance) {
-        container.appendChild(el('h5', 'text-xs font-semibold text-[#1F2937] mb-1', 'Clinical relevance'));
-        container.appendChild(el('p', 'mb-3 text-sm text-[#1F2937]', summary.clinical_relevance));
+        container.appendChild(el('h5', '', '임상적 의미'));
+        container.appendChild(el('p', '', summary.clinical_relevance));
     }
 
     if (Array.isArray(summary.key_points) && summary.key_points.length > 0) {
-        container.appendChild(el('h5', 'text-xs font-semibold text-[#1F2937] mb-1', 'Key points'));
-        const list = el('ul', 'mb-3 list-disc pl-5 text-sm text-[#1F2937] space-y-1');
+        container.appendChild(el('h5', '', '핵심 포인트'));
+        const list = el('ul', '');
         summary.key_points.forEach(point => {
             list.appendChild(el('li', '', point));
         });
@@ -107,21 +120,22 @@ function renderSummary(container, data) {
     }
 
     if (summary.limitations) {
-        container.appendChild(el('h5', 'text-xs font-semibold text-[#1F2937] mb-1', 'Limitations'));
-        container.appendChild(el('p', 'mb-3 text-sm text-[#1F2937]', summary.limitations));
+        container.appendChild(el('h5', '', '제한점'));
+        container.appendChild(el('p', '', summary.limitations));
     }
 
     if (summary.confidence) {
-        const confidence = el('p', 'text-[11px] text-gray-500', `Confidence: ${summary.confidence}`);
+        const confidence = el('p', 'abstract-muted', `신뢰도: ${summary.confidence}`);
         container.appendChild(confidence);
     }
 }
 
 function createSummarySection(article) {
-    const wrapper = el('div');
-    wrapper.appendChild(el('h4', 'text-xs font-semibold text-[#1F2937] mb-1', 'AI 근거 요약:'));
+    const wrapper = el('section', 'summary-section');
+    const header = el('div', 'summary-section-header');
+    header.appendChild(el('h4', 'article-section-title', 'AI 근거 요약'));
 
-    const button = el('button', 'summary-button text-xs bg-[#1F2937] text-white hover:bg-[#0F766E] py-1 px-2.5 rounded-md transition duration-150 ease-in-out');
+    const button = el('button', 'summary-button');
     button.type = 'button';
     button.dataset.pmid = article.pmid || '';
     button.disabled = !isAbstractAvailable(article);
@@ -130,11 +144,12 @@ function createSummarySection(article) {
     }
 
     const buttonText = el('span', 'button-text', '요약 보기');
-    const spinner = el('span', 'button-spinner hidden w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin ml-1.5');
-    button.append(buttonText, spinner);
-    wrapper.appendChild(button);
+    const spinner = el('span', 'button-spinner hidden');
+    button.append(icon('sparkles'), buttonText, spinner);
+    header.appendChild(button);
+    wrapper.appendChild(header);
 
-    const summaryContainer = el('div', 'summary-text-content mt-1.5 p-3 rounded-md bg-[#EEF5F2] text-xs text-[#1F2937]');
+    const summaryContainer = el('div', 'summary-text-content');
     summaryContainer.hidden = true;
     wrapper.appendChild(summaryContainer);
 
@@ -166,34 +181,98 @@ function createSummarySection(article) {
     return wrapper;
 }
 
-function createPmidLink(article) {
-    const paragraph = el('p', 'mt-2.5 text-xs text-gray-500');
-    paragraph.appendChild(document.createTextNode('PMID: '));
+function createArticleLink(href, iconName, text) {
+    const link = el('a', 'article-action');
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.append(icon(iconName), document.createTextNode(text));
+    return link;
+}
+
+function buildCitation(article) {
+    const parts = [
+        article.authors,
+        article.title,
+        article.journalName,
+        article.publicationDate
+    ].filter(value => value && value !== 'N/A');
+
+    const suffix = [
+        article.doi ? `doi: ${article.doi}` : '',
+        article.pmid && article.pmid !== 'N/A' ? `PMID: ${article.pmid}` : ''
+    ].filter(Boolean).join('. ');
+
+    return suffix ? `${parts.join('. ')}. ${suffix}` : parts.join('. ');
+}
+
+function createCopyCitationButton(article) {
+    const button = el('button', 'article-action');
+    button.type = 'button';
+    button.append(icon('copy'), document.createTextNode('인용 복사'));
+
+    button.addEventListener('click', async () => {
+        const citation = buildCitation(article);
+        try {
+            await navigator.clipboard.writeText(citation);
+            button.replaceChildren(icon('check'), document.createTextNode('복사됨'));
+            setTimeout(() => {
+                button.replaceChildren(icon('copy'), document.createTextNode('인용 복사'));
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            }, 1400);
+        } catch {
+            button.replaceChildren(icon('copy'), document.createTextNode('복사 실패'));
+        } finally {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+    });
+
+    return button;
+}
+
+function createArticleActions(article) {
+    const actions = el('div', 'article-actions');
 
     if (article.pmid && article.pmid !== 'N/A') {
-        const link = el('a', 'text-[#1F2937] hover:underline', article.pmid);
-        link.href = article.pmidLink || `https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(article.pmid)}/`;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        paragraph.appendChild(link);
-    } else {
-        paragraph.appendChild(document.createTextNode('N/A'));
+        actions.appendChild(createArticleLink(article.pmidLink || `https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(article.pmid)}/`, 'external-link', 'PubMed'));
     }
 
-    return paragraph;
+    if (article.doi) {
+        actions.appendChild(createArticleLink(`https://doi.org/${encodeURIComponent(article.doi)}`, 'link', 'DOI'));
+    }
+
+    actions.appendChild(createCopyCitationButton(article));
+
+    const pmid = el('span', 'pmid-text', `PMID ${article.pmid || 'N/A'}`);
+    actions.appendChild(pmid);
+
+    return actions;
 }
 
 function createArticleCard(article) {
-    const card = el('div', 'article-card p-4 sm:p-5 rounded-lg shadow-md border border-[#CFE3DC]');
+    const card = el('article', 'article-card');
     card.dataset.pmid = article.pmid || '';
 
-    card.appendChild(el('h3', 'text-md sm:text-lg font-semibold article-title mb-1.5', article.title || 'No title information'));
-    appendField(card, '저자', article.authors);
-    appendField(card, '저널', article.journalName);
-    appendField(card, '출간일', article.publicationDate || 'N/A');
+    const header = el('div', 'article-card-header');
+    header.appendChild(el('h3', 'article-title', article.title || 'No title information'));
+    card.appendChild(header);
+
+    const meta = el('div', 'article-meta');
+    meta.appendChild(createMetaPill('book-open', article.journalName));
+    meta.appendChild(createMetaPill('calendar-days', article.publicationDate || 'N/A'));
+    if (article.doi) {
+        meta.appendChild(createMetaPill('fingerprint', 'DOI'));
+    }
+    card.appendChild(meta);
+
+    card.appendChild(el('p', 'article-authors', article.authors || 'No author information'));
     card.appendChild(createAbstractSection(article));
     card.appendChild(createSummarySection(article));
-    card.appendChild(createPmidLink(article));
+    card.appendChild(createArticleActions(article));
 
     return card;
 }
@@ -201,6 +280,9 @@ function createArticleCard(article) {
 function displayArticles(articles, articlesListElement, isNewSearch) {
     if (isNewSearch) {
         articlesListElement.replaceChildren();
+    }
+    if (articles.length > 0) {
+        hideEmptyState();
     }
     articles.forEach(article => {
         const articleCard = createArticleCard(article);
@@ -238,21 +320,14 @@ function displayGlobalError(message) {
         return;
     }
 
-    const alert = el('div', 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md relative');
+    const alert = el('div', 'error-alert');
     alert.setAttribute('role', 'alert');
 
-    const row = el('div', 'flex');
-    const iconWrap = el('div', 'py-1');
-    const icon = el('i', 'h-5 w-5 text-red-500 mr-3');
-    icon.setAttribute('data-lucide', 'alert-triangle');
-    iconWrap.appendChild(icon);
-
     const textWrap = el('div');
-    textWrap.appendChild(el('p', 'font-bold', '오류'));
+    textWrap.appendChild(el('strong', '', '오류'));
     textWrap.appendChild(el('p', 'text-sm', message));
 
-    row.append(iconWrap, textWrap);
-    alert.appendChild(row);
+    alert.append(icon('alert-triangle'), textWrap);
     errorMessageContainer.replaceChildren(alert);
 
     if (typeof lucide !== 'undefined') {
@@ -268,19 +343,47 @@ function clearGlobalError() {
 
 function showInfiniteScrollLoader(show) {
     if (infiniteScrollLoaderElement) {
-        infiniteScrollLoaderElement.style.display = show ? 'block' : 'none';
+        infiniteScrollLoaderElement.style.display = show ? 'flex' : 'none';
     }
 }
 function hideInfiniteScrollLoader() { showInfiniteScrollLoader(false); }
 
 function showNoMoreResults() {
     if (noMoreResultsElement) {
-        noMoreResultsElement.style.display = 'block';
+        noMoreResultsElement.style.display = 'flex';
     }
 }
 function hideNoMoreResults() {
     if (noMoreResultsElement) {
         noMoreResultsElement.style.display = 'none';
+    }
+}
+
+function showEmptyState(title = '검색 대기', description = '기간과 저널을 선택하면 PubMed 결과가 여기에 표시됩니다.') {
+    if (!emptyStateElement) {
+        return;
+    }
+
+    const titleElement = emptyStateElement.querySelector('h3');
+    const descriptionElement = emptyStateElement.querySelector('p');
+
+    if (titleElement) {
+        titleElement.textContent = title;
+    }
+    if (descriptionElement) {
+        descriptionElement.textContent = description;
+    }
+
+    emptyStateElement.style.display = 'flex';
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function hideEmptyState() {
+    if (emptyStateElement) {
+        emptyStateElement.style.display = 'none';
     }
 }
 
@@ -295,5 +398,7 @@ export {
     showInfiniteScrollLoader,
     hideInfiniteScrollLoader,
     showNoMoreResults,
-    hideNoMoreResults
+    hideNoMoreResults,
+    showEmptyState,
+    hideEmptyState
 };
