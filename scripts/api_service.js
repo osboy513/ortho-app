@@ -1,13 +1,8 @@
 const ESEARCH_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi';
 const EFETCH_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi';
-const NCBI_API_KEY = '';
 
 function buildNcbiQuery(params) {
-    const searchParams = new URLSearchParams(params);
-    if (NCBI_API_KEY) {
-        searchParams.set('api_key', NCBI_API_KEY);
-    }
-    return searchParams.toString();
+    return new URLSearchParams(params).toString();
 }
 
 function escapePubMedPhrase(value) {
@@ -58,8 +53,6 @@ function buildDateQuery(startDate, endDate) {
     const startYearMonth = parseYearMonth(startDate);
     const startDateFormatted = startYearMonth ? formatStartOfMonth(startYearMonth) : '0001/01/01';
     const endDateFormatted = formatEndOfMonth(endYearMonth);
-
-    console.log('PubMed 날짜 쿼리 범위:', startDateFormatted, '-', endDateFormatted);
 
     return [
         `"${startDateFormatted}"[Date - Entrez] : "${endDateFormatted}"[Date - Entrez]`,
@@ -149,8 +142,7 @@ async function searchPubMed(queryOptions) {
     }
     
     const searchTerm = searchTerms.join(" AND ");
-    console.log('최종 PubMed 쿼리:', searchTerm);
-    
+
     try {
         // ESearch로 ID 목록 가져오기
         const searchUrl = `${ESEARCH_URL}?${buildNcbiQuery({

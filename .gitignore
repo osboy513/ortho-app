@@ -31,6 +31,3 @@ Thumbs.db
 # Package manager locks
 package-lock.json
 yarn.lock
-
-# Development scripts (optional)
-convert-icons.js

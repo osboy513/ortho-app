@@ -18,13 +18,6 @@ function el(tagName, className = '', text = '') {
     return element;
 }
 
-function appendField(container, label, value) {
-    const paragraph = el('p', 'text-xs text-gray-600 mb-0.5');
-    const strong = el('strong', '', `${label}: `);
-    paragraph.append(strong, document.createTextNode(value || 'N/A'));
-    container.appendChild(paragraph);
-}
-
 function icon(name) {
     const element = el('i');
     element.setAttribute('data-lucide', name);

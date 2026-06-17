@@ -6,8 +6,7 @@ import { journalCategories } from './journal_data.js?v=18';
 
 // 설정 값
 const CONFIG = {
-    articlesPerPage: 15,
-    searchDelay: 300 // ms
+    articlesPerPage: 15
 };
 const AI_SEARCH_MODE_STORAGE_KEY = 'ortho.aiSearch.enabled';
 
@@ -26,8 +25,6 @@ if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
             .then(async registration => {
-                console.log('서비스 워커가 등록되었습니다:', registration.scope);
-
                 if (registration.waiting) {
                     registration.waiting.postMessage({ type: 'SKIP_WAITING' });
                 }
@@ -292,7 +289,6 @@ function initUI() {
     const keywordsInput = document.getElementById('keywords');
     const aiSearchToggle = document.getElementById('ai-search-toggle');
     const journalFilterContainer = document.getElementById('journal-filter-container');
-    const resultsPanel = document.getElementById('results-panel');
     const articlesListElement = document.getElementById('articles-list');
     const scrollSentinel = document.getElementById('scroll-sentinel');
     const rightPanelScroller = document.getElementById('right-panel-scroller');
@@ -312,7 +308,6 @@ function initUI() {
     // 검색 상태 관리 변수
     let currentSearchQuery = null;
     let currentRetstart = 0;
-    let totalResultsFound = 0;
     let isLoadingMore = false;
     let allArticlesLoaded = false;
     let hasMore = true;
@@ -365,11 +360,9 @@ function initUI() {
     if (scrollSentinel && rightPanelScroller) {
         setupInfiniteScroll(scrollSentinel, rightPanelScroller, () => {
             if (isLoadingMore || allArticlesLoaded || !currentSearchQuery || !hasMore) {
-                console.log("무한 스크롤 중단 - isLoadingMore:", isLoadingMore, "allArticlesLoaded:", allArticlesLoaded, "hasMore:", hasMore);
                 return;
             }
 
-            console.log("스크롤 감지: 추가 논문을 로드합니다. currentRetstart:", currentRetstart);
             performSearch(false);
         });
     }
@@ -484,7 +477,6 @@ function initUI() {
 
             // UTC 기준의 새로운 날짜 필터링 함수로 최종 필터링
             const filteredArticles = filterArticlesByDate(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
-            console.log(`API 응답: ${articles.length}개, 최종 필터 후: ${filteredArticles.length}개`);
 
             const { availableArticles, unavailableArticles } = splitArticlesByAbstract(filteredArticles);
             if (unavailableArticles.length > 0) {
@@ -510,7 +502,6 @@ function initUI() {
             }
 
             if (isNewSearch) {
-                totalResultsFound = totalResults;
                 const resultMessage = currentSearchQuery.aiSearch?.enabled && aiRankingApplied
                     ? `총 ${totalResults}개의 후보 논문을 찾았습니다. AI 관련도순으로 정렬했습니다.`
                     : `총 ${totalResults}개의 논문을 찾았습니다.`;
@@ -527,7 +518,6 @@ function initUI() {
             if (articles.length === 0 || articles.length < CONFIG.articlesPerPage || currentRetstart >= totalResults) {
                 allArticlesLoaded = true;
                 hasMore = false;
-                console.log("모든 논문 로드 완료");
 
                 if (deferredNoAbstractArticles.length > 0) {
                     appendArticles(deferredNoAbstractArticles, articlesListElement);
@@ -615,15 +605,6 @@ function initDateFields(startDateInput, endDateInput) {
     const maxDate = formatYearMonth(maxFutureDate);
     startDateInput.max = maxDate;
     endDateInput.max = maxDate;
-
-    // 입력 변경 감지
-    startDateInput.addEventListener('change', () => {
-        console.log('Start date changed:', startDateInput.value);
-    });
-
-    endDateInput.addEventListener('change', () => {
-        console.log('End date changed:', endDateInput.value);
-    });
 
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
@@ -1090,7 +1071,6 @@ function validateAndBuildSearchQuery(startDateInput, endDateInput, journalFilter
 // 네트워크 상태 모니터링 및 사용자 피드백 개선
 window.addEventListener('online', () => {
     clearGlobalError();
-    console.log('네트워크 연결이 복구되었습니다.');
 });
 
 window.addEventListener('offline', () => {
@@ -1110,12 +1090,6 @@ window.addEventListener('error', (event) => {
     }
 });
 
-// 페이지 언로드 시 정리 작업
-window.addEventListener('beforeunload', () => {
-    // 필요한 경우 정리 작업 수행
-    console.log('페이지를 떠납니다.');
-});
-
 // 타임존 문제 해결을 위한 UTC 기반 날짜 필터링 함수
 function filterArticlesByDate(articles, startDateStr, endDateStr) {
     if (!endDateStr) return articles;
@@ -1124,8 +1098,6 @@ function filterArticlesByDate(articles, startDateStr, endDateStr) {
         // YYYY-MM 형식을 파싱
         const [endYear, endMonth] = endDateStr.split('-').map(Number);
         const [startYear, startMonth] = startDateStr ? startDateStr.split('-').map(Number) : [0, 0];
-
-        console.log(`날짜 필터링: ${startDateStr || '전체 기간'} ~ ${endYear}-${endMonth}`);
 
         return articles.filter(article => {
             if (!article.publicationDate) return false;
@@ -1142,13 +1114,7 @@ function filterArticlesByDate(articles, startDateStr, endDateStr) {
             const startYearMonth = startDateStr ? startYear * 100 + startMonth : 0;
             const endYearMonth = endYear * 100 + endMonth;
 
-            const isInRange = pubYearMonth >= startYearMonth && pubYearMonth <= endYearMonth;
-
-            if (!isInRange) {
-                console.log(`필터링 제외: ${article.publicationDate} (${pubYearMonth}) - 범위: ${startYearMonth} ~ ${endYearMonth}`);
-            }
-
-            return isInRange;
+            return pubYearMonth >= startYearMonth && pubYearMonth <= endYearMonth;
         });
     } catch (e) {
         console.error("날짜 필터링 중 오류 발생:", e);

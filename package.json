@@ -8,7 +8,6 @@
     "start": "http-server . -p 8080 -o",
     "dev": "npx vercel dev --listen 8080",
     "start:static": "http-server . -p 8080 -o",
-    "build:icons": "node convert-icons.js",
     "validate:journals": "node scripts/validate_pubmed_journals.mjs"
   },
   "keywords": [
@@ -24,7 +23,6 @@
     "openai": "^6.42.0"
   },
   "devDependencies": {
-    "http-server": "^14.1.1",
-    "sharp": "^0.35.1"
+    "http-server": "^14.1.1"
   }
 }
