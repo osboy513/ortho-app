@@ -1,4 +1,4 @@
-import { searchNCBI, fetchAllArticlesForExport } from './api_service.js';
+import { searchNCBI, fetchAllArticlesForExport, filterArticlesByDateRange } from './api_service.js';
 import { generateAiSearchQuery, rankAiSearchResults } from './ai_search_service.js';
 import { AI_PROVIDER_PRESETS, clearAiSettings, getSummaryServiceStatus, loadAiSettings, resolveSelectedModel, saveAiSettings } from './summary_service.js';
 import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults, showEmptyState, hideEmptyState } from './ui_manager.js';
@@ -551,7 +551,7 @@ function initUI() {
             });
 
             // UTC 기준의 새로운 날짜 필터링 함수로 최종 필터링
-            const filteredArticles = filterArticlesByDate(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
+            const filteredArticles = filterArticlesByDateRange(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
 
             const { availableArticles, unavailableArticles } = splitArticlesByAbstract(filteredArticles);
             if (unavailableArticles.length > 0) {
@@ -1164,38 +1164,6 @@ window.addEventListener('error', (event) => {
         }
     }
 });
-
-// 타임존 문제 해결을 위한 UTC 기반 날짜 필터링 함수
-function filterArticlesByDate(articles, startDateStr, endDateStr) {
-    if (!endDateStr) return articles;
-
-    try {
-        // YYYY-MM 형식을 파싱
-        const [endYear, endMonth] = endDateStr.split('-').map(Number);
-        const [startYear, startMonth] = startDateStr ? startDateStr.split('-').map(Number) : [0, 0];
-
-        return articles.filter(article => {
-            if (!article.publicationDate) return false;
-
-            // publicationDate를 파싱 (YYYY-MM-DD, YYYY-MM, YYYY 형식 모두 지원)
-            const dateParts = article.publicationDate.split('-');
-            const pubYear = parseInt(dateParts[0]);
-            const pubMonth = dateParts[1] ? parseInt(dateParts[1]) : 1;
-
-            if (!pubYear || isNaN(pubYear)) return false;
-
-            // 연도와 월을 비교
-            const pubYearMonth = pubYear * 100 + pubMonth;
-            const startYearMonth = startDateStr ? startYear * 100 + startMonth : 0;
-            const endYearMonth = endYear * 100 + endMonth;
-
-            return pubYearMonth >= startYearMonth && pubYearMonth <= endYearMonth;
-        });
-    } catch (e) {
-        console.error("날짜 필터링 중 오류 발생:", e);
-        return articles;
-    }
-}
 
 function hasAvailableAbstract(article) {
     const abstract = String(article?.abstract || '').trim();

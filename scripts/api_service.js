@@ -77,7 +77,7 @@ function getPublicationYearMonth(publicationDate) {
     return pubYear * 100 + (pubMonth || 1);
 }
 
-function filterArticlesByQueryDateRange(articles, startDate, endDate) {
+function filterArticlesByDateRange(articles, startDate, endDate) {
     const endYearMonth = parseYearMonth(endDate);
     if (!endYearMonth) {
         return articles;
@@ -409,7 +409,7 @@ async function fetchAllArticlesForExport(queryOptions) {
         articles.push(...batchArticles);
     }
 
-    return filterArticlesByQueryDateRange(articles, queryOptions.startDate, queryOptions.endDate);
+    return filterArticlesByDateRange(articles, queryOptions.startDate, queryOptions.endDate);
 }
 
-export { searchNCBI, fetchAllArticlesForExport };
+export { searchNCBI, fetchAllArticlesForExport, filterArticlesByDateRange };
