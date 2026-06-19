@@ -386,6 +386,7 @@ function initUI() {
     let isLoadingMore = false;
     let allArticlesLoaded = false;
     let hasMore = true;
+    let loadMoreFailed = false;
     let deferredNoAbstractArticles = [];
 
     // 날짜 입력 필드 초기화
@@ -434,7 +435,7 @@ function initUI() {
     // IntersectionObserver를 사용한 무한 스크롤 설정
     if (scrollSentinel && rightPanelScroller) {
         setupInfiniteScroll(scrollSentinel, rightPanelScroller, () => {
-            if (isLoadingMore || allArticlesLoaded || !currentSearchQuery || !hasMore) {
+            if (isLoadingMore || allArticlesLoaded || loadMoreFailed || !currentSearchQuery || !hasMore) {
                 return;
             }
 
@@ -498,6 +499,7 @@ function initUI() {
             currentRetstart = 0;
             allArticlesLoaded = false;
             hasMore = true;
+            loadMoreFailed = false;
             deferredNoAbstractArticles = [];
 
             clearGlobalError();
@@ -552,6 +554,7 @@ function initUI() {
 
             // UTC 기준의 새로운 날짜 필터링 함수로 최종 필터링
             const filteredArticles = filterArticlesByDateRange(articles, currentSearchQuery.startDate, currentSearchQuery.endDate);
+            loadMoreFailed = false;
 
             const { availableArticles, unavailableArticles } = splitArticlesByAbstract(filteredArticles);
             if (unavailableArticles.length > 0) {
@@ -610,16 +613,14 @@ function initUI() {
             }
         } catch (error) {
             console.error('Search failed:', error);
-            let userErrorMessage = '논문 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+            const userErrorMessage = getSearchErrorMessage(error);
+            const displayedCount = articlesListElement.querySelectorAll('.article-card').length;
 
-            if (error.message) {
-                if (error.message.includes("NCBI ESearch API error") || error.message.includes("NCBI EFetch API error")) {
-                    userErrorMessage = `PubMed API 통신 중 오류가 발생했습니다.`;
-                } else if (error.message.includes("Network error") || error.message.includes("네트워크")) {
-                    userErrorMessage = "네트워크 오류로 PubMed API에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.";
-                } else {
-                    userErrorMessage = error.message;
-                }
+            if (!isNewSearch && displayedCount > 0) {
+                loadMoreFailed = true;
+                clearGlobalError();
+                displayResultsCount(`${displayedCount}개 논문을 표시 중입니다. 추가 결과를 불러오지 못했습니다. 검색 버튼을 다시 누르면 재시도할 수 있습니다.`);
+                return false;
             }
 
             displayGlobalError(userErrorMessage);
@@ -1079,6 +1080,32 @@ function setupInfiniteScroll(sentinel, container, callback) {
     if (sentinel) {
         observer.observe(sentinel);
     }
+}
+
+function isFetchNetworkError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return [
+        'load failed',
+        'failed to fetch',
+        'networkerror',
+        'network error',
+        'the internet connection appears to be offline',
+        'a server with the specified hostname could not be found'
+    ].some(pattern => message.includes(pattern));
+}
+
+function getSearchErrorMessage(error) {
+    const message = String(error?.message || '').trim();
+
+    if (message.includes('NCBI ESearch API error') || message.includes('NCBI EFetch API error')) {
+        return 'PubMed API 통신 중 오류가 발생했습니다.';
+    }
+
+    if (isFetchNetworkError(error) || message.includes('네트워크')) {
+        return '네트워크 요청이 일시적으로 실패했습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.';
+    }
+
+    return message || '논문 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
 }
 
 // 검색 버튼 상태 업데이트
