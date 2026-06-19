@@ -342,12 +342,18 @@ function displayGlobalError(message) {
         return;
     }
 
+    const normalizedMessage = normalizeGlobalErrorMessage(message);
+    if (isTransientLoadFailure(message) && document.querySelectorAll('.article-card').length > 0) {
+        clearGlobalError();
+        return;
+    }
+
     const alert = el('div', 'error-alert');
     alert.setAttribute('role', 'alert');
 
     const textWrap = el('div');
     textWrap.appendChild(el('strong', '', '오류'));
-    textWrap.appendChild(el('p', 'text-sm', message));
+    textWrap.appendChild(el('p', 'text-sm', normalizedMessage));
 
     alert.append(icon('alert-triangle'), textWrap);
     errorMessageContainer.replaceChildren(alert);
@@ -355,6 +361,23 @@ function displayGlobalError(message) {
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
+}
+
+function isTransientLoadFailure(message) {
+    const text = String(message || '').toLowerCase();
+    return [
+        'load failed',
+        'failed to fetch',
+        'networkerror',
+        'network error'
+    ].some(pattern => text.includes(pattern));
+}
+
+function normalizeGlobalErrorMessage(message) {
+    if (isTransientLoadFailure(message)) {
+        return '네트워크 요청이 일시적으로 실패했습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.';
+    }
+    return message || '알 수 없는 오류가 발생했습니다.';
 }
 
 function clearGlobalError() {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ortho-paper-v19';
+const CACHE_NAME = 'ortho-paper-v20';
 const urlsToCache = [
   './',
   './index.html',
@@ -6,10 +6,10 @@ const urlsToCache = [
   './manifest.json',
   './scripts/ai_search_service.js',
   './scripts/journal_data.js?v=18',
-  './scripts/main.js',
+  './scripts/main.js?v=20',
   './scripts/api_service.js',
   './scripts/summary_service.js',
-  './scripts/ui_manager.js',
+  './scripts/ui_manager.js?v=20',
   './icons/icon-192x192.png',
   './icons/icon-512x512.png'
 ];

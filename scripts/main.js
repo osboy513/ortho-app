@@ -1,7 +1,7 @@
 import { searchNCBI, fetchAllArticlesForExport, filterArticlesByDateRange } from './api_service.js';
 import { generateAiSearchQuery, rankAiSearchResults } from './ai_search_service.js';
 import { AI_PROVIDER_PRESETS, clearAiSettings, getSummaryServiceStatus, loadAiSettings, resolveSelectedModel, saveAiSettings } from './summary_service.js';
-import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults, showEmptyState, hideEmptyState } from './ui_manager.js';
+import { displayArticles, showInitialLoadingIndicator, clearResultsDisplay, displayResultsCount, displayGlobalError, clearGlobalError, appendArticles, showInfiniteScrollLoader, hideInfiniteScrollLoader, showNoMoreResults, hideNoMoreResults, showEmptyState, hideEmptyState } from './ui_manager.js?v=20';
 import { journalCategories } from './journal_data.js?v=18';
 
 // 설정 값
@@ -1186,9 +1186,19 @@ window.addEventListener('error', (event) => {
     // 사용자에게 표시할 에러가 API 관련인 경우 특별 처리
     if (event.error && event.error.message) {
         const errorMessage = event.error.message;
-        if (errorMessage.includes('API') || errorMessage.includes('fetch')) {
+        if (isFetchNetworkError(event.error)) {
+            displayGlobalError(getSearchErrorMessage(event.error));
+        } else if (errorMessage.includes('API') || errorMessage.includes('fetch')) {
             displayGlobalError('서비스 연결에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
         }
+    }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    if (isFetchNetworkError(reason)) {
+        event.preventDefault();
+        displayGlobalError(getSearchErrorMessage(reason));
     }
 });
 
